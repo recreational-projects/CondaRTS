@@ -9,8 +9,8 @@ TILE_SIZE = 32
 BUILDING_RANGE = 160
 BASE_PRODUCTION_TIME = 180
 POWER_PER_PLANT = 100
-GDI_COLOR = (150, 150, 0)
-NOD_COLOR = (150, 0, 0)
+GDI_COLOR = (200, 150, 0)  # Brighter yellow for GDI
+NOD_COLOR = (200, 0, 0)    # Brighter red for NOD
 VALID_PLACEMENT_COLOR = (0, 255, 0)
 INVALID_PLACEMENT_COLOR = (255, 0, 0)
 CONSOLE_HEIGHT = 200
@@ -90,7 +90,8 @@ class FogOfWar:
                 self.reveal(building.rect.center, 200)
             if hasattr(building, 'rect') and building.health > 0:
                 tile_x, tile_y = int(building.rect.centerx // self.tile_size), int(building.rect.centery // self.tile_size)
-                if 0 <= tile_x < len(self.visible) and 0 <= tile_y < len(self.visible[0]) and self.visible[tile_x][tile_y]:
+                if 0 <= tile_x < len(self.visible) and 0 <= tile_y < len(self.visible[0]):
+                    self.visible[tile_x][tile_y] = True
                     building.is_seen = True
 
     def is_tile_visible(self, x, y):
@@ -194,23 +195,28 @@ class GameObject(pygame.sprite.Sprite):
         color = (0, 255, 0) if health_ratio > 0.5 else (255, 0, 0)
         bar_width = max(10, self.rect.width * health_ratio)
         screen_rect = camera.apply(self.rect)
+        pygame.draw.rect(screen, (0, 0, 0), (screen_rect.x - 1, screen_rect.y - 16, self.rect.width + 2, 10))  # Background
         pygame.draw.rect(screen, color, (screen_rect.x, screen_rect.y - 15, bar_width, 8))
-        pygame.draw.rect(screen, (255, 255, 255), (screen_rect.x, screen_rect.y - 15, self.rect.width, 8), 2)
+        pygame.draw.rect(screen, (255, 255, 255), (screen_rect.x, screen_rect.y - 15, self.rect.width, 8), 1)  # Border
 
 class Tank(GameObject):
     cost = 500
     def __init__(self, x, y, team):
         super().__init__(x, y, team)
-        self.base_image = pygame.Surface((24, 24), pygame.SRCALPHA)
-        self.base_image.fill((255, 165, 0) if team == Team.GDI.value else (255, 0, 0))
-        self.barrel_image = pygame.Surface((18, 6), pygame.SRCALPHA)
-        pygame.draw.line(self.barrel_image, (80, 80, 80), (0, 3), (12, 3), 4)
+        self.base_image = pygame.Surface((30, 20), pygame.SRCALPHA)
+        # Draw tank body (front facing east/right)
+        pygame.draw.rect(self.base_image, (100, 100, 100), (0, 0, 30, 20))  # Hull
+        pygame.draw.rect(self.base_image, (80, 80, 80), (2, 2, 26, 16))    # Inner hull
+        pygame.draw.rect(self.base_image, (50, 50, 50), (0, -2, 30, 4))    # Tracks top
+        pygame.draw.rect(self.base_image, (50, 50, 50), (0, 18, 30, 4))    # Tracks bottom
+        self.barrel_image = pygame.Surface((20, 4), pygame.SRCALPHA)
+        pygame.draw.rect(self.barrel_image, (70, 70, 70), (0, 0, 20, 4))   # Barrel (extends right)
         self.image = self.base_image
         self.rect = self.image.get_rect(center=(x, y))
         self.speed = 2.5 if team == Team.GDI.value else 3
         self.health = 200 if team == Team.GDI.value else 120
         self.max_health = self.health
-        self.attack_range = 100
+        self.attack_range = 200
         self.attack_damage = 20 if team == Team.GDI.value else 15
         self.attack_cooldown = 50
         self.angle = 0
@@ -227,29 +233,37 @@ class Tank(GameObject):
             self.target_unit = self.target_unit if self.target else None
         if self.target:
             dx, dy = self.target[0] - self.rect.centerx, self.target[1] - self.rect.centery
-            self.angle = math.degrees(math.atan2(-dy, dx))
-        self.image = pygame.Surface((36, 36), pygame.SRCALPHA)
-        self.image.blit(self.base_image, (6, 6))
-        barrel_length = 12 - self.recoil * 2
-        barrel_image = pygame.Surface((18, 6), pygame.SRCALPHA)
-        pygame.draw.line(barrel_image, (80, 80, 80), (0, 3), (barrel_length, 3), 4)
-        rotated_barrel = pygame.transform.rotate(barrel_image, self.angle)
-        self.image.blit(rotated_barrel, rotated_barrel.get_rect(center=(18, 18)))
-        if self.recoil > 0:
-            self.recoil -= 1
+            self.angle = math.degrees(math.atan2(dy, dx))  # Use dy instead of -dy to fix vertical direction
+            self.image = pygame.Surface((40, 40), pygame.SRCALPHA)
+            # Rotate base image to face target (base image faces east, so -angle aligns it correctly)
+            rotated_base = pygame.transform.rotate(self.base_image, -self.angle)
+            self.image.blit(rotated_base, rotated_base.get_rect(center=(20, 20)))
+            # Handle barrel with recoil
+            barrel_length = 20 - self.recoil * 2
+            barrel_image = pygame.Surface((barrel_length, 4), pygame.SRCALPHA)
+            pygame.draw.rect(barrel_image, (70, 70, 70), (0, 0, barrel_length, 4))
+            # Rotate barrel to match target direction
+            rotated_barrel = pygame.transform.rotate(barrel_image, -self.angle)  # Barrel also faces east initially
+            self.image.blit(rotated_barrel, rotated_barrel.get_rect(center=(20, 20)))
+            if self.recoil > 0:
+                self.recoil -= 1
 
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self.rect).topleft)
         if self.selected:
-            pygame.draw.rect(screen, (255, 255, 255), camera.apply(self.rect), 2)
+            pygame.draw.circle(screen, (255, 255, 255), camera.apply(self.rect).center, self.rect.width // 2 + 2, 2)  # Circular selection
         self.draw_health_bar(screen, camera)
 
 class Infantry(GameObject):
     cost = 100
     def __init__(self, x, y, team):
         super().__init__(x, y, team)
-        self.image = pygame.Surface((12, 12), pygame.SRCALPHA)
-        pygame.draw.circle(self.image, (200, 200, 0) if team == Team.GDI.value else (200, 0, 0), (6, 6), 6)
+        self.image = pygame.Surface((16, 16), pygame.SRCALPHA)
+        # Draw infantry as a simple soldier
+        pygame.draw.circle(self.image, (150, 150, 150), (8, 4), 4)  # Head
+        pygame.draw.rect(self.image, (100, 100, 100), (6, 8, 4, 8))  # Body
+        pygame.draw.line(self.image, (80, 80, 80), (8, 16), (8, 20))  # Legs
+        pygame.draw.line(self.image, (120, 120, 120), (10, 10), (14, 10))  # Gun
         self.rect = self.image.get_rect(center=(x, y))
         self.speed = 3.5 if team == Team.GDI.value else 4
         self.health = 100 if team == Team.GDI.value else 60
@@ -271,15 +285,19 @@ class Infantry(GameObject):
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self.rect).topleft)
         if self.selected:
-            pygame.draw.rect(screen, (255, 255, 255), camera.apply(self.rect), 2)
+            pygame.draw.circle(screen, (255, 255, 255), camera.apply(self.rect).center, 10, 2)
         self.draw_health_bar(screen, camera)
 
 class Harvester(GameObject):
     cost = 800
     def __init__(self, x, y, team, headquarters):
         super().__init__(x, y, team)
-        self.image = pygame.Surface((48, 30), pygame.SRCALPHA)
-        pygame.draw.ellipse(self.image, (100, 100, 100), (0, 0, 48, 30))
+        self.image = pygame.Surface((50, 30), pygame.SRCALPHA)
+        # Draw harvester as a truck
+        pygame.draw.rect(self.image, (120, 120, 120), (0, 0, 50, 30))  # Body
+        pygame.draw.rect(self.image, (100, 100, 100), (5, 5, 40, 20))  # Cargo area
+        pygame.draw.circle(self.image, (50, 50, 50), (10, 30), 5)      # Wheel 1
+        pygame.draw.circle(self.image, (50, 50, 50), (40, 30), 5)      # Wheel 2
         self.rect = self.image.get_rect(center=(x, y))
         self.speed = 2.5
         self.health = 300
@@ -355,7 +373,13 @@ class Building(GameObject):
     def __init__(self, x, y, team, size, color, health, cost, power_usage):
         super().__init__(x, y, team)
         self.image = pygame.Surface(size, pygame.SRCALPHA)
-        self.image.fill(color)
+        # Add details to building
+        pygame.draw.rect(self.image, color, (0, 0, size[0], size[1]))  # Base
+        # Clamp color values to prevent negative values
+        inner_color = (max(0, color[0] - 50), max(0, color[1] - 50), max(0, color[2] - 50))
+        pygame.draw.rect(self.image, inner_color, (5, 5, size[0] - 10, size[1] - 10))  # Inner
+        for i in range(10, size[0] - 10, 20):
+            pygame.draw.rect(self.image, (200, 200, 200), (i, 10, 10, 10))  # Windows
         self.rect = self.image.get_rect(topleft=(x, y))
         self.health = health
         self.max_health = health
@@ -461,22 +485,22 @@ class Headquarters(Building):
 class Barracks(Building):
     cost = 500
     def __init__(self, x, y, team):
-        super().__init__(x, y, team, (60, 60), (100, 100, 0) if team == Team.GDI.value else (100, 0, 0), 600, self.cost, 25)
+        super().__init__(x, y, team, (60, 60), (150, 150, 0) if team == Team.GDI.value else (150, 0, 0), 600, self.cost, 25)
 
 class WarFactory(Building):
     cost = 1000
     def __init__(self, x, y, team):
-        super().__init__(x, y, team, (60, 60), (120, 120, 0) if team == Team.GDI.value else (120, 0, 0), 800, self.cost, 35)
+        super().__init__(x, y, team, (60, 60), (170, 170, 0) if team == Team.GDI.value else (170, 0, 0), 800, self.cost, 35)
 
 class PowerPlant(Building):
     cost = 300
     def __init__(self, x, y, team):
-        super().__init__(x, y, team, (60, 60), (80, 80, 0) if team == Team.GDI.value else (80, 0, 0), 500, self.cost, 0)
+        super().__init__(x, y, team, (60, 60), (130, 130, 0) if team == Team.GDI.value else (130, 0, 0), 500, self.cost, 0)
 
 class Turret(Building):
     cost = 600
     def __init__(self, x, y, team):
-        super().__init__(x, y, team, (50, 50), (130, 130, 0) if team == Team.GDI.value else (130, 0, 0), 500, self.cost, 25)
+        super().__init__(x, y, team, (50, 50), (180, 180, 0) if team == Team.GDI.value else (180, 0, 0), 500, self.cost, 25)
         self.attack_range = 180
         self.attack_damage = 15
         self.attack_cooldown = 25
@@ -508,25 +532,13 @@ class Turret(Building):
                 self.target_unit = None
         self.image = pygame.Surface((50, 50), pygame.SRCALPHA)
         base = pygame.Surface((40, 40), pygame.SRCALPHA)
-        base.fill((130, 130, 0) if self.team == Team.GDI.value else (130, 0, 0))
+        base.fill((180, 180, 0) if self.team == Team.GDI.value else (180, 0, 0))
         barrel = pygame.Surface((25, 6), pygame.SRCALPHA)
         pygame.draw.line(barrel, (80, 80, 80), (0, 3), (18, 3), 4)
         rotated_barrel = pygame.transform.rotate(barrel, self.angle)
         self.image.blit(base, (5, 5))
         self.image.blit(rotated_barrel, rotated_barrel.get_rect(center=(25, 25)))
         self.image.set_alpha(int(255 * self.construction_progress / self.construction_time))
-
-class BuildingType(Enum):
-    HEADQUARTERS = Headquarters
-    BARRACKS = Barracks
-    WARFACTORY = WarFactory
-    POWERPLANT = PowerPlant
-    TURRET = Turret
-
-class UnitType(Enum):
-    TANK = Tank
-    INFANTRY = Infantry
-    HARVESTER = Harvester
 
 class Particle(pygame.sprite.Sprite):
     def __init__(self, x, y, vx, vy, size, color, lifetime):
@@ -556,7 +568,7 @@ class Projectile(pygame.sprite.Sprite):
     def __init__(self, x, y, target, damage, team):
         super().__init__()
         self.image = pygame.Surface((10, 5), pygame.SRCALPHA)
-        pygame.draw.ellipse(self.image, (255, 255, 200), (0, 0, 10, 5))
+        pygame.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))  # Brighter projectile
         self.rect = self.image.get_rect(center=(x, y))
         self.target = target
         self.speed = 6
@@ -571,7 +583,7 @@ class Projectile(pygame.sprite.Sprite):
             if dist > 3:
                 angle = math.atan2(dy, dx)
                 self.image = pygame.transform.rotate(pygame.Surface((10, 5), pygame.SRCALPHA), -math.degrees(angle))
-                pygame.draw.ellipse(self.image, (255, 255, 200), (0, 0, 10, 5))
+                pygame.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))
                 self.rect = self.image.get_rect(center=self.rect.center)
                 self.rect.x += self.speed * math.cos(angle)
                 self.rect.y += self.speed * math.sin(angle)
@@ -584,7 +596,7 @@ class Projectile(pygame.sprite.Sprite):
             else:
                 self.kill()
                 for _ in range(5):
-                    particles.add(Particle(self.rect.centerx, self.rect.centery, random.uniform(-2, 2), random.uniform(-2, 2), 6, (255, 200, 100), 15))
+                    particles.add(Particle(self.rect.centerx, self.rect.centery, random.uniform(-2, 2), random.uniform(-2, 2), 6, (255, 100, 0), 15))  # Orange explosion
         else:
             self.kill()
 
@@ -595,7 +607,7 @@ class IronField(pygame.sprite.Sprite):
     def __init__(self, x, y, resources=5000):
         super().__init__()
         self.image = pygame.Surface((40, 40), pygame.SRCALPHA)
-        pygame.draw.rect(self.image, (0, 255, 0), (0, 0, 40, 40))
+        pygame.draw.polygon(self.image, (0, 200, 0), [(0, 20), (20, 0), (40, 20), (20, 40)])  # Diamond shape for crystal
         self.rect = self.image.get_rect(topleft=(x, y))
         self.resources = resources
         self.regen_timer = 500
@@ -658,7 +670,8 @@ class ProductionInterface:
                               PowerPlant: "Power Plant", Headquarters: "Headquarters", Turret: "Turret", None: "Sell"}
 
     def draw(self, screen, iron):
-        pygame.draw.rect(screen, (80, 80, 80), self.panel_rect)
+        pygame.draw.rect(screen, (60, 60, 60), self.panel_rect)  # Darker panel
+        pygame.draw.rect(screen, (100, 100, 100), self.panel_rect, 2)  # Border
         screen.blit(font.render(f"Power: {self.headquarters.power_output}/{self.headquarters.power_usage}", True, 
                                 (0, 255, 0) if self.headquarters.has_enough_power else (255, 0, 0)), (SCREEN_WIDTH - 180, 10))
         for rect, tab_name in self.tab_buttons:
@@ -726,13 +739,13 @@ class GameConsole:
             self.lines.pop(0)
 
     def draw(self, screen):
-        pygame.draw.rect(screen, (50, 50, 50), self.rect)
-        pygame.draw.rect(screen, (100, 100, 100), self.rect, 2)
+        pygame.draw.rect(screen, (40, 40, 40), self.rect)  # Darker console
+        pygame.draw.rect(screen, (80, 80, 80), self.rect, 2)
         visible_lines = self.lines[self.scroll_offset:]
         for i, line in enumerate(visible_lines):
             if i >= self.max_lines:
                 break
-            text_surface = console_font.render(line, True, (255, 255, 255))
+            text_surface = console_font.render(line, True, (200, 200, 200))
             screen.blit(text_surface, (self.rect.x + 5, self.rect.y + 5 + i * 18))
         scroll_height = self.rect.height - 20
         scroll_pos = (self.scroll_offset / max(1, len(self.lines) - self.max_lines)) * (scroll_height - 20) if len(self.lines) > self.max_lines else 0
@@ -762,7 +775,7 @@ class GameConsole:
                 if 0 <= line_idx < len(self.lines):
                     self.selected_text = self.lines[line_idx]
                     try:
-                        pygame.scrap.put(pygame.SRCAP_TEXT, self.selected_text.encode('utf-8'))
+                        pygame.scrap.put(pygame.SCRAP_TEXT, self.selected_text.encode('utf-8'))
                         print(f"Copied to clipboard: {self.selected_text}")
                     except Exception as e:
                         print(f"Failed to copy to clipboard: {e}")
@@ -1066,36 +1079,53 @@ def handle_attacks(units, all_units, buildings, projectiles, particles):
                 unit.target = closest_target.rect.center
                 if isinstance(unit, Tank):
                     dx, dy = closest_target.rect.centerx - unit.rect.centerx, closest_target.rect.centery - unit.rect.centery
-                    unit.angle = math.degrees(math.atan2(-dy, dx))
+                    unit.angle = math.degrees(math.atan2(dy, dx))  # Updated to match Tank's angle calculation
                     projectiles.add(Projectile(unit.rect.centerx, unit.rect.centery, closest_target, unit.attack_damage, unit.team))
                     unit.recoil = 5
                     barrel_angle = math.radians(unit.angle)
                     smoke_x = unit.rect.centerx + math.cos(barrel_angle) * (unit.rect.width // 2 + 12)
-                    smoke_y = unit.rect.centery - math.sin(barrel_angle) * (unit.rect.width // 2 + 12)
+                    smoke_y = unit.rect.centery + math.sin(barrel_angle) * (unit.rect.width // 2 + 12)
                     for _ in range(5):
                         particles.add(Particle(smoke_x, smoke_y, random.uniform(-1.5, 1.5), random.uniform(-1.5, 1.5), random.randint(6, 10), (100, 100, 100), 20))
                 else:
                     closest_target.health -= unit.attack_damage
+                    closest_target.under_attack = True  # Set under_attack only when damage is applied
                     for _ in range(3):
                         particles.add(Particle(unit.rect.centerx, unit.rect.centery, random.uniform(-1, 1), random.uniform(-1, 1), 4, (255, 200, 100), 10))
                     if closest_target.health <= 0:
                         closest_target.kill()
                         unit.target = unit.target_unit = None
                 unit.cooldown_timer = unit.attack_cooldown
-                if hasattr(closest_target, 'under_attack'):
-                    closest_target.under_attack = True
 
 def handle_projectiles(projectiles, all_units, buildings):
     for projectile in projectiles:
-        if projectile.target and hasattr(projectile.target, 'health') and projectile.target.health > 0 and projectile.rect.colliderect(projectile.target.rect):
-            projectile.target.health -= projectile.damage
-            if projectile.target.health <= 0:
-                projectile.target.kill()
-            else:
+        hit = False
+        # Check collision with all units and buildings, not just the target
+        for target in all_units:
+            if target.team != projectile.team and target.health > 0 and projectile.rect.colliderect(target.rect):
+                target.health -= projectile.damage
+                target.under_attack = True  # Set under_attack when damage is applied
                 for _ in range(5):
                     particles.add(Particle(projectile.rect.centerx, projectile.rect.centery, random.uniform(-2, 2), random.uniform(-2, 2), 6, (255, 200, 100), 15))
+                if target.health <= 0:
+                    target.kill()
+                hit = True
+                break
+        if not hit:
+            for target in buildings:
+                if target.team != projectile.team and target.health > 0 and projectile.rect.colliderect(target.rect):
+                    target.health -= projectile.damage
+                    target.under_attack = True  # Set under_attack when damage is applied
+                    for _ in range(5):
+                        particles.add(Particle(projectile.rect.centerx, projectile.rect.centery, random.uniform(-2, 2), random.uniform(-2, 2), 6, (255, 200, 100), 15))
+                    if target.health <= 0:
+                        target.kill()
+                    hit = True
+                    break
+        if hit:
             projectile.kill()
-        else:
+        # Only kill projectile if it has no valid target or moves too far
+        elif not (projectile.target and hasattr(projectile.target, 'health') and projectile.target.health > 0):
             projectile.kill()
 
 player_units = pygame.sprite.Group()
@@ -1118,7 +1148,14 @@ select_start = None
 select_rect = None
 camera = Camera(MAP_WIDTH, MAP_HEIGHT)
 base_map = pygame.Surface((MAP_WIDTH, MAP_HEIGHT))
-base_map.fill((0, 128, 0))
+# Improved map with grass texture
+for x in range(0, MAP_WIDTH, TILE_SIZE):
+    for y in range(0, MAP_HEIGHT, TILE_SIZE):
+        color = (0, random.randint(100, 150), 0)
+        pygame.draw.rect(base_map, color, (x, y, TILE_SIZE, TILE_SIZE))
+        if random.random() < 0.1:
+            pygame.draw.circle(base_map, (0, 80, 0), (x + TILE_SIZE//2, y + TILE_SIZE//2), TILE_SIZE//4)  # Dark spots
+
 ai = AI(nod_headquarters, enemy_units, all_units, iron_fields, buildings)
 
 player_units.add(Infantry(350, 300, Team.GDI.value))
@@ -1135,6 +1172,8 @@ all_units.add(player_units, enemy_units)
 buildings.add(gdi_headquarters, nod_headquarters)
 for _ in range(40):
     iron_fields.add(IronField(random.randint(100, MAP_WIDTH - 100), random.randint(100, MAP_HEIGHT - 100)))
+
+
 
 running = True
 while running:
