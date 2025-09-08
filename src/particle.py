@@ -6,6 +6,8 @@ from typing import Self
 
 import pygame
 
+from src.camera import Camera
+
 
 class Particle(pygame.sprite.Sprite):
     def __init__(self, *, x: float, y: float, vx: float, vy: float, size: int, color, lifetime: int) -> None:
@@ -121,5 +123,5 @@ class Particle(pygame.sprite.Sprite):
             self.alpha = int(255 * self.lifetime / self.initial_lifetime)
             self.image.set_alpha(self.alpha)
 
-    def draw(self, *, surface: pygame.Surface, camera) -> None:
+    def draw(self, *, surface: pygame.Surface, camera: Camera) -> None:
         surface.blit(self.image, camera.apply(self.rect).topleft)
