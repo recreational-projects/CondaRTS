@@ -3,8 +3,10 @@ import random
 
 import pygame
 
+from src.constants import MAP_HEIGHT, MAP_WIDTH
+from src.game_object import GameObject
+
 SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
-MAP_WIDTH, MAP_HEIGHT = 3200, 2400
 TILE_SIZE = 32
 BUILDING_RANGE = 160
 BASE_PRODUCTION_TIME = 180
@@ -314,83 +316,11 @@ class FogOfWar:
         screen.blit(self.surface, (-camera.rect.x, -camera.rect.y))
 
 
-class GameObject(pygame.sprite.Sprite):
-    cost = 0
-
-    def __init__(self, x, y, team):
-        super().__init__()
-        self.team = team
-        self.target = None
-        self.formation_target = None
-        self.speed = 0
-        self.health = 0
-        self.max_health = 0
-        self.attack_range = 0
-        self.attack_damage = 0
-        self.attack_cooldown = 0
-        self.cooldown_timer = 0
-        self.rect = None
-        self.selected = False
-        self.power_usage = 0
-        self.under_attack = False
-        self.target_unit = None
-
-    def move_toward(self):
-        if (
-            self.target
-            and hasattr(self, "target_unit")
-            and self.target_unit
-            and hasattr(self.target_unit, "health")
-            and self.target_unit.health > 0
-        ):
-            dx, dy = (self.target[0] - self.rect.centerx, self.target[1] - self.rect.centery)
-            dist = math.sqrt(dx**2 + dy**2)
-            if dist > self.attack_range:
-                if dist > 5:
-                    self.rect.x += self.speed * dx / dist
-                    self.rect.y += self.speed * dy / dist
-                self.rect.clamp_ip(pygame.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
-            else:
-                self.target = None
-        elif self.formation_target:
-            dx, dy = (self.formation_target[0] - self.rect.centerx, self.formation_target[1] - self.rect.centery)
-            dist = math.sqrt(dx**2 + dy**2)
-            if dist > 5:
-                self.rect.x += self.speed * dx / dist
-                self.rect.y += self.speed * dy / dist
-            self.rect.clamp_ip(pygame.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
-        elif self.target:
-            dx, dy = (self.target[0] - self.rect.centerx, self.target[1] - self.rect.centery)
-            dist = math.sqrt(dx**2 + dy**2)
-            if dist > 5:
-                self.rect.x += self.speed * dx / dist
-                self.rect.y += self.speed * dy / dist
-            self.rect.clamp_ip(pygame.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
-
-    def update(self):
-        self.move_toward()
-        if self.cooldown_timer > 0:
-            self.cooldown_timer -= 1
-
-    def draw_health_bar(self, screen, camera):
-        health_ratio = self.health / self.max_health
-        if not self.under_attack and health_ratio == 1.0:
-            return
-        color = (0, 255, 0) if health_ratio > 0.5 else (255, 0, 0)
-        bar_width = max(10, self.rect.width * health_ratio)
-        screen_rect = camera.apply(self.rect)
-        pygame.draw.rect(
-            screen, (0, 0, 0), (screen_rect.x - 1, screen_rect.y - 16, self.rect.width + 2, 10)
-        )  # Background
-        pygame.draw.rect(screen, color, (screen_rect.x, screen_rect.y - 15, bar_width, 8))
-        pygame.draw.rect(screen, (255, 255, 255), (screen_rect.x, screen_rect.y - 15, self.rect.width, 8), 1)  # Border
-
-
 class Tank(GameObject):
     cost = 500
 
     def __init__(self, x, y, team):
-        super().__init__(x, y, team)
+        super().__init__(x=x, y=y, team=team)
         self.base_image = pygame.Surface((30, 20), pygame.SRCALPHA)
         # Draw tank body (front facing east/right)
         pygame.draw.rect(self.base_image, (100, 100, 100), (0, 0, 30, 20))  # Hull
@@ -451,7 +381,7 @@ class Infantry(GameObject):
     cost = 100
 
     def __init__(self, x, y, team):
-        super().__init__(x, y, team)
+        super().__init__(x=x, y=y, team=team)
         self.image = pygame.Surface((16, 16), pygame.SRCALPHA)
         # Draw infantry as a simple soldier
         pygame.draw.circle(self.image, (150, 150, 150), (8, 4), 4)  # Head
@@ -489,7 +419,7 @@ class Harvester(GameObject):
     cost = 800
 
     def __init__(self, x, y, team, headquarters):
-        super().__init__(x, y, team)
+        super().__init__(x=x, y=y, team=team)
         self.image = pygame.Surface((50, 30), pygame.SRCALPHA)
         # Draw harvester as a truck
         pygame.draw.rect(self.image, (120, 120, 120), (0, 0, 50, 30))  # Body
@@ -586,7 +516,7 @@ class Harvester(GameObject):
 
 class Building(GameObject):
     def __init__(self, x, y, team, size, color, health, cost, power_usage):
-        super().__init__(x, y, team)
+        super().__init__(x=x, y=y, team=team)
         self.image = pygame.Surface(size, pygame.SRCALPHA)
         # Add details to building
         pygame.draw.rect(self.image, color, (0, 0, size[0], size[1]))  # Base
