@@ -17,9 +17,17 @@ dev = [
 line-length = 120
 
 [tool.ruff.lint]
-select = ["I"]
+select = [
+    "ANN201",  # Missing return type annotation for public function
+    "ANN202",  # ... private function
+    "ANN204",  # ... special method
+    "ANN205",  # ... static method
+    "ANN206",   # ... class method
+    "I",  # isort
+]
 
 [tool.ruff.lint.per-file-ignores]
 "CondaRTS.py" = [
+    "ANN",  # flake8-annotations
     "COM812",  # Trailing comma missing - conflicts with ruff format
 ]
