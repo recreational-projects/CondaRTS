@@ -116,13 +116,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles):
                     )
                     unit.angle = math.degrees(math.atan2(dy, dx))  # Updated to match Tank's angle calculation
                     projectiles.add(
-                        Projectile(
-                            unit.rect.centerx,
-                            unit.rect.centery,
-                            closest_target,
-                            unit.attack_damage,
-                            unit.team,
-                        )
+                        Projectile(unit.rect.centerx, unit.rect.centery, closest_target, unit.attack_damage, unit.team)
                     )
                     unit.recoil = 5
                     barrel_angle = math.radians(unit.angle)
@@ -268,7 +262,10 @@ class FogOfWar:
         cx, cy = center
         tile_x, tile_y = cx // self.tile_size, cy // self.tile_size
         radius_tiles = radius // self.tile_size
-        for y in range(max(0, tile_y - radius_tiles), min(len(self.explored[0]), tile_y + radius_tiles + 1)):
+        for y in range(
+            max(0, tile_y - radius_tiles),
+            min(len(self.explored[0]), tile_y + radius_tiles + 1),
+        ):
             for x in range(max(0, tile_x - radius_tiles), min(len(self.explored), tile_x + radius_tiles + 1)):
                 if (
                     math.sqrt(
@@ -1104,10 +1101,7 @@ class ProductionInterface:
             )
             screen.blit(
                 temp_surface,
-                (
-                    mouse_pos[0] - building_size[0] // 2,
-                    mouse_pos[1] - building_size[1] // 2,
-                ),
+                (mouse_pos[0] - building_size[0] // 2, mouse_pos[1] - building_size[1] // 2),
             )
 
     def handle_click(self, pos, iron):
@@ -1164,11 +1158,7 @@ class GameConsole:
             if len(self.lines) > self.max_lines
             else 0
         )
-        pygame.draw.rect(
-            screen,
-            (150, 150, 150),
-            (self.rect.right - 15, self.rect.y + 5 + scroll_pos, 10, 20),
-        )
+        pygame.draw.rect(screen, (150, 150, 150), (self.rect.right - 15, self.rect.y + 5 + scroll_pos, 10, 20))
 
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos()
