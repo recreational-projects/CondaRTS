@@ -5,6 +5,7 @@ import pygame
 
 from src.constants import MAP_HEIGHT, MAP_WIDTH
 from src.game_object import GameObject
+from src.particle import Particle
 
 SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
 TILE_SIZE = 32
@@ -121,35 +122,16 @@ def handle_attacks(units, all_units, buildings, projectiles, particles):
                     )
                     unit.recoil = 5
                     barrel_angle = math.radians(unit.angle)
-                    smoke_x = unit.rect.centerx + math.cos(barrel_angle) * (unit.rect.width // 2 + 12)
-                    smoke_y = unit.rect.centery + math.sin(barrel_angle) * (unit.rect.width // 2 + 12)
-                    for _ in range(5):
-                        particles.add(
-                            Particle(
-                                smoke_x,
-                                smoke_y,
-                                random.uniform(-1.5, 1.5),
-                                random.uniform(-1.5, 1.5),
-                                random.randint(6, 10),
-                                (100, 100, 100),
-                                20,
-                            )
+                    particles.add(
+                        Particle.smoke_cloud(
+                            unit.rect.centerx + math.cos(barrel_angle) * (unit.rect.width // 2 + 12),
+                            unit.rect.centery + math.sin(barrel_angle) * (unit.rect.width // 2 + 12),
                         )
+                    )
                 else:
                     closest_target.health -= unit.attack_damage
                     closest_target.under_attack = True  # Set under_attack only when damage is applied
-                    for _ in range(3):
-                        particles.add(
-                            Particle(
-                                unit.rect.centerx,
-                                unit.rect.centery,
-                                random.uniform(-1, 1),
-                                random.uniform(-1, 1),
-                                4,
-                                (255, 200, 100),
-                                10,
-                            )
-                        )
+                    particles.add(Particle.damage_cloud_small(unit.rect.centerx, unit.rect.centery))
                     if closest_target.health <= 0:
                         closest_target.kill()
                         unit.target = unit.target_unit = None
@@ -164,18 +146,7 @@ def handle_projectiles(projectiles, all_units, buildings):
             if target.team != projectile.team and target.health > 0 and projectile.rect.colliderect(target.rect):
                 target.health -= projectile.damage
                 target.under_attack = True  # Set under_attack when damage is applied
-                for _ in range(5):
-                    particles.add(
-                        Particle(
-                            projectile.rect.centerx,
-                            projectile.rect.centery,
-                            random.uniform(-2, 2),
-                            random.uniform(-2, 2),
-                            6,
-                            (255, 200, 100),
-                            15,
-                        )
-                    )
+                particles.add(Particle.damage_cloud_large(projectile.rect.centerx, projectile.rect.centery))
                 if target.health <= 0:
                     target.kill()
                 hit = True
@@ -185,18 +156,7 @@ def handle_projectiles(projectiles, all_units, buildings):
                 if target.team != projectile.team and target.health > 0 and projectile.rect.colliderect(target.rect):
                     target.health -= projectile.damage
                     target.under_attack = True  # Set under_attack when damage is applied
-                    for _ in range(5):
-                        particles.add(
-                            Particle(
-                                projectile.rect.centerx,
-                                projectile.rect.centery,
-                                random.uniform(-2, 2),
-                                random.uniform(-2, 2),
-                                6,
-                                (255, 200, 100),
-                                15,
-                            )
-                        )
+                    particles.add(Particle.damage_cloud_large(projectile.rect.centerx, projectile.rect.centery))
                     if target.health <= 0:
                         target.kill()
                     hit = True
@@ -540,18 +500,7 @@ class Building(GameObject):
             self.image.set_alpha(int(255 * self.construction_progress / self.construction_time))
         super().update()
         if self.health <= 0:
-            for _ in range(15):
-                particles.add(
-                    Particle(
-                        self.rect.centerx,
-                        self.rect.centery,
-                        random.uniform(-3, 3),
-                        random.uniform(-3, 3),
-                        random.randint(6, 12),
-                        (200, 100, 100),
-                        30,
-                    )
-                )
+            particles.add(Particle.building_explosion(self.rect.centerx, self.rect.centery))
             self.kill()
 
     def draw(self, screen, camera):
@@ -735,18 +684,7 @@ class Turret(Building):
                     Projectile(self.rect.centerx, self.rect.centery, closest_target, self.attack_damage, self.team)
                 )
                 self.cooldown_timer = self.attack_cooldown
-                for _ in range(5):
-                    particles.add(
-                        Particle(
-                            self.rect.centerx,
-                            self.rect.centery,
-                            random.uniform(-1.5, 1.5),
-                            random.uniform(-1.5, 1.5),
-                            random.randint(6, 10),
-                            (100, 100, 100),
-                            20,
-                        )
-                    )
+                particles.add(Particle.smoke_cloud(self.rect.centerx, self.rect.centery))
             else:
                 self.target_unit = None
         self.image = pygame.Surface((50, 50), pygame.SRCALPHA)
@@ -758,31 +696,6 @@ class Turret(Building):
         self.image.blit(base, (5, 5))
         self.image.blit(rotated_barrel, rotated_barrel.get_rect(center=(25, 25)))
         self.image.set_alpha(int(255 * self.construction_progress / self.construction_time))
-
-
-class Particle(pygame.sprite.Sprite):
-    def __init__(self, x, y, vx, vy, size, color, lifetime):
-        super().__init__()
-        self.image = pygame.Surface((size, size), pygame.SRCALPHA)
-        pygame.draw.circle(self.image, color, (size // 2, size // 2), size // 2)
-        self.rect = self.image.get_rect(center=(x, y))
-        self.vx, self.vy = vx, vy
-        self.lifetime = lifetime
-        self.alpha = 255
-        self.initial_lifetime = lifetime
-
-    def update(self):
-        self.rect.x += self.vx
-        self.rect.y += self.vy
-        self.lifetime -= 1
-        if self.lifetime <= 0:
-            self.kill()
-        else:
-            self.alpha = int(255 * self.lifetime / self.initial_lifetime)
-            self.image.set_alpha(self.alpha)
-
-    def draw(self, screen, camera):
-        screen.blit(self.image, camera.apply(self.rect).topleft)
 
 
 class Projectile(pygame.sprite.Sprite):
@@ -809,34 +722,14 @@ class Projectile(pygame.sprite.Sprite):
                 self.rect.x += self.speed * math.cos(angle)
                 self.rect.y += self.speed * math.sin(angle)
                 if self.particle_timer <= 0:
-                    particles.add(
-                        Particle(
-                            self.rect.centerx,
-                            self.rect.centery,
-                            -math.cos(angle) * random.uniform(0.5, 1.5),
-                            -math.sin(angle) * random.uniform(0.5, 1.5),
-                            5,
-                            (255, 255, 150),
-                            15,
-                        )
-                    )
+                    particles.add(Particle.projectile_trail(x=self.rect.centerx, y=self.rect.centery, angle=angle))
                     self.particle_timer = 2
                 else:
                     self.particle_timer -= 1
             else:
                 self.kill()
                 for _ in range(5):
-                    particles.add(
-                        Particle(
-                            self.rect.centerx,
-                            self.rect.centery,
-                            random.uniform(-2, 2),
-                            random.uniform(-2, 2),
-                            6,
-                            (255, 100, 0),
-                            15,
-                        )
-                    )  # Orange explosion
+                    particles.add(Particle.projectile_explosion(self.rect.centerx, self.rect.centery))
         else:
             self.kill()
 
