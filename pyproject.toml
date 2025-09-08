@@ -1,0 +1,8 @@
+[project]
+name = "CondaRTS"
+version = "0.0.1"
+description = "Add your description here"
+requires-python = ">=3.10"
+dependencies = [
+    "pygame-ce>=2.5.5",
+]
