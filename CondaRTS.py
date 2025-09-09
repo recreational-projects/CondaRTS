@@ -7,6 +7,7 @@ from src.camera import Camera
 from src.constants import CONSOLE_HEIGHT, MAP_HEIGHT, MAP_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, TILE_SIZE
 from src.fog_of_war import FogOfWar
 from src.game_object import GameObject
+from src.geometry import calculate_formation_positions, snap_to_grid
 from src.particle import Particle
 
 BUILDING_RANGE = 160
@@ -16,33 +17,6 @@ GDI_COLOR = (200, 150, 0)  # Brighter yellow for GDI
 NOD_COLOR = (200, 0, 0)  # Brighter red for NOD
 VALID_PLACEMENT_COLOR = (0, 255, 0)
 INVALID_PLACEMENT_COLOR = (255, 0, 0)
-
-
-def calculate_formation_positions(center, target, num_units, direction=None):
-    if num_units == 0:
-        return []
-    max_cols, max_rows = 5, 4
-    spacing = 20
-    positions = []
-    if direction is None and target:
-        dx, dy = target[0] - center[0], target[1] - center[1]
-        angle = math.atan2(dy, dx) if dx != 0 or dy != 0 else 0
-    else:
-        angle = direction if direction is not None else 0
-    cos_a, sin_a = math.cos(angle), math.sin(angle)
-    for i in range(min(num_units, max_cols * max_rows)):
-        row = i // max_cols
-        col = i % max_cols
-        offset_x = (col - (max_cols - 1) / 2) * spacing
-        offset_y = (row - (max_rows - 1) / 2) * spacing
-        rotated_x = offset_x * cos_a - offset_y * sin_a
-        rotated_y = offset_x * sin_a + offset_y * cos_a
-        positions.append((center[0] + rotated_x, center[1] + rotated_y))
-    return positions
-
-
-def snap_to_grid(x, y):
-    return (x // TILE_SIZE) * TILE_SIZE, (y // TILE_SIZE) * TILE_SIZE
 
 
 def is_valid_building_position(x, y, team):

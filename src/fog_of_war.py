@@ -6,6 +6,7 @@ import pygame
 
 from src.camera import Camera
 from src.constants import TILE_SIZE
+from src.geometry import grid_index
 
 
 class FogOfWar:
@@ -16,9 +17,9 @@ class FogOfWar:
         self.surface = pygame.Surface((map_width, map_height), pygame.SRCALPHA)
         self.surface.fill((0, 0, 0, 255))
 
-    def reveal(self, center, radius: int) -> None:
+    def reveal(self, center: tuple[int, int], radius: int) -> None:
+        tile_x, tile_y = grid_index(*center)
         cx, cy = center
-        tile_x, tile_y = cx // self.tile_size, cy // self.tile_size
         radius_tiles = radius // self.tile_size
         for y in range(
             max(0, tile_y - radius_tiles),
@@ -52,14 +53,14 @@ class FogOfWar:
                     self.visible[tile_x][tile_y] = True
                     building.is_seen = True
 
-    def is_tile_visible(self, x, y) -> bool:
-        tile_x, tile_y = int(x // self.tile_size), int(y // self.tile_size)
+    def is_tile_visible(self, x: int, y: int) -> bool:
+        tile_x, tile_y = grid_index(x, y)
         if 0 <= tile_x < len(self.visible) and 0 <= tile_y < len(self.visible[0]):
             return self.visible[tile_x][tile_y]
         return False
 
-    def is_tile_explored(self, x, y) -> bool:
-        tile_x, tile_y = int(x // self.tile_size), int(y // self.tile_size)
+    def is_tile_explored(self, x: int, y: int) -> bool:
+        tile_x, tile_y = grid_index(x, y)
         if 0 <= tile_x < len(self.explored) and 0 <= tile_y < len(self.explored[0]):
             return self.explored[tile_x][tile_y]
         return False
