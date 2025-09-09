@@ -1387,6 +1387,9 @@ if __name__ == "__main__":
                                 unit.formation_target = None
             elif event.type == pygame.MOUSEMOTION and selecting:
                 current_pos = event.pos
+                if select_start is None:
+                    raise TypeError("No selection rect start point")  # Temporary handling, review later
+
                 select_rect = pygame.Rect(
                     min(select_start[0], current_pos[0]),
                     min(select_start[1], current_pos[1]),
@@ -1394,6 +1397,9 @@ if __name__ == "__main__":
                     abs(current_pos[1] - select_start[1]),
                 )
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and selecting:
+                if select_start is None:
+                    raise TypeError("No selection rect start point")  # Temporary handling, review later
+
                 selecting = False
                 for unit in player_units:
                     unit.selected = False
