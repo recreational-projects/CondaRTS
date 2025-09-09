@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 import pygame
 
-from src.camera import Camera
+if TYPE_CHECKING:
+    from src.camera import Camera
 
 
 class Particle(pygame.sprite.Sprite):
@@ -98,7 +99,7 @@ class Particle(pygame.sprite.Sprite):
         }
 
     @classmethod
-    def projectile_explosion(cls, x, y: float) -> set[Self]:
+    def projectile_explosion(cls, x: float, y: float) -> set[Self]:
         """Return a cloud of particles."""
         return {
             cls(

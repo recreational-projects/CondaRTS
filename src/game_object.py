@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import math
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import pygame
 
 from src.constants import MAP_HEIGHT, MAP_WIDTH
+
+if TYPE_CHECKING:
+    from src.camera import Camera
 
 
 class GameObject(pygame.sprite.Sprite):
@@ -73,7 +76,7 @@ class GameObject(pygame.sprite.Sprite):
         if self.cooldown_timer > 0:
             self.cooldown_timer -= 1
 
-    def draw_health_bar(self, screen, camera) -> None:
+    def draw_health_bar(self, surface: pygame.Surface, camera: Camera) -> None:
         health_ratio = self.health / self.max_health
         if not self.under_attack and health_ratio == 1.0:
             return
@@ -81,14 +84,9 @@ class GameObject(pygame.sprite.Sprite):
         bar_width = max(10, self.rect.width * health_ratio)
         screen_rect = camera.apply(self.rect)
         pygame.draw.rect(
-            screen,
+            surface,
             (0, 0, 0),
             (screen_rect.x - 1, screen_rect.y - 16, self.rect.width + 2, 10),
         )  # Background
-        pygame.draw.rect(screen, color, (screen_rect.x, screen_rect.y - 15, bar_width, 8))
-        pygame.draw.rect(
-            screen,
-            (255, 255, 255),
-            (screen_rect.x, screen_rect.y - 15, self.rect.width, 8),
-            1,
-        )  # Border
+        pygame.draw.rect(surface, color, (screen_rect.x, screen_rect.y - 15, bar_width, 8))
+        pygame.draw.rect(surface, (255, 255, 255), (screen_rect.x, screen_rect.y - 15, self.rect.width, 8), 1)  # Border

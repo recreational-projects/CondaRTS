@@ -18,16 +18,18 @@ line-length = 120
 
 [tool.ruff.lint]
 select = [
-    "ANN201",  # Missing return type annotation for public function
-    "ANN202",  # ... private function
-    "ANN204",  # ... special method
-    "ANN205",  # ... static method
-    "ANN206",   # ... class method
+    "ANN",  # flake8-annotations
     "I",  # isort
+    "TC",  # flake8-type-checking
+]
+ignore =[
+    "ANN001",  # Missing type annotation for function argument
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# Be lenient with original code:
 "CondaRTS.py" = [
-    "ANN",  # flake8-annotations
+    "ANN201",  # Missing return type annotation for public function
+    "ANN204",  # ... special method
     "COM812",  # Trailing comma missing - conflicts with ruff format
 ]

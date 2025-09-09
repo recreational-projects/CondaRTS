@@ -1,5 +1,6 @@
 import math
 import random
+from typing import Any, TypeAlias
 
 import pygame
 
@@ -7,7 +8,7 @@ from src.camera import Camera
 from src.constants import CONSOLE_HEIGHT, MAP_HEIGHT, MAP_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, TILE_SIZE
 from src.fog_of_war import FogOfWar
 from src.game_object import GameObject
-from src.geometry import calculate_formation_positions, snap_to_grid
+from src.geometry import IntCoord, calculate_formation_positions, snap_to_grid
 from src.particle import Particle
 
 BUILDING_RANGE = 160
@@ -18,8 +19,10 @@ NOD_COLOR = (200, 0, 0)  # Brighter red for NOD
 VALID_PLACEMENT_COLOR = (0, 255, 0)
 INVALID_PLACEMENT_COLOR = (255, 0, 0)
 
+SpriteGroup: TypeAlias = pygame.sprite.Group[Any]
 
-def is_valid_building_position(x, y, team):
+
+def is_valid_building_position(x, y, team) -> bool:
     for building in buildings:
         if building.team == team and building.health > 0:
             if math.sqrt((x - building.rect.centerx) ** 2 + (y - building.rect.centery) ** 2) <= BUILDING_RANGE:
@@ -27,7 +30,7 @@ def is_valid_building_position(x, y, team):
     return False
 
 
-def collides_with_building(x, y, building_class):
+def collides_with_building(x, y, building_class) -> bool:
     building_size = (80, 80) if building_class == Headquarters else (50, 50) if building_class == Turret else (60, 60)
     new_rect = pygame.Rect(x, y, building_size[0], building_size[1])
     for building in buildings:
@@ -36,7 +39,7 @@ def collides_with_building(x, y, building_class):
     return False
 
 
-def handle_collisions(units):
+def handle_collisions(units) -> None:
     for unit in units:
         for other in units:
             if unit != other and unit.rect.colliderect(other.rect):
@@ -53,7 +56,7 @@ def handle_collisions(units):
                     other.rect.y -= push * dy / dist
 
 
-def handle_attacks(units, all_units, buildings, projectiles, particles):
+def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
     for unit in units:
         if isinstance(unit, (Tank, Infantry)) and unit.cooldown_timer == 0:
             closest_target, min_dist = None, float("inf")
@@ -111,7 +114,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles):
                 unit.cooldown_timer = unit.attack_cooldown
 
 
-def handle_projectiles(projectiles, all_units, buildings):
+def handle_projectiles(projectiles, all_units, buildings) -> None:
     for projectile in projectiles:
         hit = False
         # Check collision with all units and buildings, not just the target
@@ -167,7 +170,7 @@ class Tank(GameObject):
         self.power_usage = 15
         self.target_unit = None
 
-    def update(self):
+    def update(self) -> None:
         super().update()
         if self.target_unit and hasattr(self.target_unit, "health") and self.target_unit.health > 0:
             dist = math.sqrt(
@@ -193,13 +196,13 @@ class Tank(GameObject):
             if self.recoil > 0:
                 self.recoil -= 1
 
-    def draw(self, screen, camera):
+    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
         screen.blit(self.image, camera.apply(self.rect).topleft)
         if self.selected:
             pygame.draw.circle(
-                screen, (255, 255, 255), camera.apply(self.rect).center, self.rect.width // 2 + 2, 2
+                surface, (255, 255, 255), camera.apply(self.rect).center, self.rect.width // 2 + 2, 2
             )  # Circular selection
-        self.draw_health_bar(screen, camera)
+        self.draw_health_bar(surface, camera)
 
 
 class Infantry(GameObject):
@@ -223,7 +226,7 @@ class Infantry(GameObject):
         self.power_usage = 5
         self.target_unit = None
 
-    def update(self):
+    def update(self) -> None:
         super().update()
         if self.target_unit and hasattr(self.target_unit, "health") and self.target_unit.health > 0:
             dist = math.sqrt(
@@ -233,11 +236,11 @@ class Infantry(GameObject):
             self.target = (self.target_unit.rect.centerx, self.target_unit.rect.centery) if dist <= 200 else None
             self.target_unit = self.target_unit if self.target else None
 
-    def draw(self, screen, camera):
-        screen.blit(self.image, camera.apply(self.rect).topleft)
+    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
+        surface.blit(self.image, camera.apply(self.rect).topleft)
         if self.selected:
-            pygame.draw.circle(screen, (255, 255, 255), camera.apply(self.rect).center, 10, 2)
-        self.draw_health_bar(screen, camera)
+            pygame.draw.circle(surface, (255, 255, 255), camera.apply(self.rect).center, 10, 2)
+        self.draw_health_bar(surface, camera)
 
 
 class Harvester(GameObject):
@@ -327,20 +330,20 @@ class Harvester(GameObject):
                 self.state = "moving_to_field"
                 self.target = None
 
-    def draw(self, screen, camera):
-        screen.blit(self.image, camera.apply(self.rect).topleft)
+    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
+        surface.blit(self.image, camera.apply(self.rect).topleft)
         if self.selected:
-            pygame.draw.rect(screen, (255, 255, 255), camera.apply(self.rect), 2)
-        self.draw_health_bar(screen, camera)
+            pygame.draw.rect(surface, (255, 255, 255), camera.apply(self.rect), 2)
+        self.draw_health_bar(surface, camera)
         if self.iron > 0:
-            screen.blit(
+            surface.blit(
                 font.render(f"Iron: {self.iron}", True, (255, 255, 255)),
                 (camera.apply(self.rect).x, camera.apply(self.rect).y - 35),
             )
 
 
 class Building(GameObject):
-    def __init__(self, x, y, team, size, color, health, cost, power_usage):
+    def __init__(self, x, y, team, size, color, health, cost, power_usage) -> None:
         super().__init__(x=x, y=y, team=team)
         self.image = pygame.Surface(size, pygame.SRCALPHA)
         # Add details to building
@@ -368,9 +371,9 @@ class Building(GameObject):
             particles.add(Particle.building_explosion(self.rect.centerx, self.rect.centery))
             self.kill()
 
-    def draw(self, screen, camera):
-        screen.blit(self.image, camera.apply(self.rect).topleft)
-        self.draw_health_bar(screen, camera)
+    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
+        surface.blit(self.image, camera.apply(self.rect).topleft)
+        self.draw_health_bar(surface, camera)
 
 
 class Headquarters(Building):
@@ -388,7 +391,7 @@ class Headquarters(Building):
         self.power_output = 0
         self.power_usage = 0
 
-    def get_production_time(self, unit_class):
+    def get_production_time(self, unit_class) -> float:
         base_time = BASE_PRODUCTION_TIME
         if unit_class == Infantry:
             barracks_count = len(
@@ -487,36 +490,36 @@ class Headquarters(Building):
             if self.production_queue and self.has_enough_power:
                 self.production_timer = self.get_production_time(self.production_queue[0])
 
-    def draw(self, screen, camera):
-        screen.blit(self.image, camera.apply(self.rect).topleft)
-        self.draw_health_bar(screen, camera)
+    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
+        surface.blit(self.image, camera.apply(self.rect).topleft)
+        self.draw_health_bar(surface, camera)
 
 
 class Barracks(Building):
     cost = 500
 
-    def __init__(self, x, y, team):
+    def __init__(self, x, y, team) -> None:
         super().__init__(x, y, team, (60, 60), (150, 150, 0) if team == "GDI" else (150, 0, 0), 600, self.cost, 25)
 
 
 class WarFactory(Building):
     cost = 1000
 
-    def __init__(self, x, y, team):
+    def __init__(self, x, y, team) -> None:
         super().__init__(x, y, team, (60, 60), (170, 170, 0) if team == "GDI" else (170, 0, 0), 800, self.cost, 35)
 
 
 class PowerPlant(Building):
     cost = 300
 
-    def __init__(self, x, y, team):
+    def __init__(self, x, y, team) -> None:
         super().__init__(x, y, team, (60, 60), (130, 130, 0) if team == "GDI" else (130, 0, 0), 500, self.cost, 0)
 
 
 class Turret(Building):
     cost = 600
 
-    def __init__(self, x, y, team):
+    def __init__(self, x, y, team) -> None:
         super().__init__(x, y, team, (50, 50), (180, 180, 0) if team == "GDI" else (180, 0, 0), 500, self.cost, 25)
         self.attack_range = 180
         self.attack_damage = 15
@@ -564,7 +567,7 @@ class Turret(Building):
 
 
 class Projectile(pygame.sprite.Sprite):
-    def __init__(self, x, y, target, damage, team):
+    def __init__(self, x, y, target, damage, team) -> None:
         super().__init__()
         self.image = pygame.Surface((10, 5), pygame.SRCALPHA)
         pygame.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))  # Brighter projectile
@@ -598,12 +601,12 @@ class Projectile(pygame.sprite.Sprite):
         else:
             self.kill()
 
-    def draw(self, screen, camera):
-        screen.blit(self.image, camera.apply(self.rect).topleft)
+    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
+        surface.blit(self.image, camera.apply(self.rect).topleft)
 
 
 class IronField(pygame.sprite.Sprite):
-    def __init__(self, x, y, resources=5000):
+    def __init__(self, x, y, resources=5000) -> None:
         super().__init__()
         self.image = pygame.Surface((40, 40), pygame.SRCALPHA)
         pygame.draw.polygon(
@@ -621,16 +624,16 @@ class IronField(pygame.sprite.Sprite):
             self.regen_timer = 500
         self.image.set_alpha(int(255 * self.resources / 5000))
 
-    def draw(self, screen, camera):
-        screen.blit(self.image, camera.apply(self.rect).topleft)
-        screen.blit(
+    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
+        surface.blit(self.image, camera.apply(self.rect).topleft)
+        surface.blit(
             font.render(f"{self.resources}", True, (255, 255, 255)),
             (camera.apply(self.rect).x, camera.apply(self.rect).y - 20),
         )
 
 
 class ProductionInterface:
-    def __init__(self, headquarters):
+    def __init__(self, headquarters) -> None:
         self.headquarters = headquarters
         self.panel_rect = pygame.Rect(SCREEN_WIDTH - 200, 0, 200, SCREEN_HEIGHT - CONSOLE_HEIGHT)
         self.current_tab = "Units"
@@ -708,10 +711,10 @@ class ProductionInterface:
             None: "Sell",
         }
 
-    def draw(self, screen, iron):
-        pygame.draw.rect(screen, (60, 60, 60), self.panel_rect)  # Darker panel
-        pygame.draw.rect(screen, (100, 100, 100), self.panel_rect, 2)  # Border
-        screen.blit(
+    def draw(self, surface: pygame.Surface, iron):
+        pygame.draw.rect(surface, (60, 60, 60), self.panel_rect)  # Darker panel
+        pygame.draw.rect(surface, (100, 100, 100), self.panel_rect, 2)  # Border
+        surface.blit(
             font.render(
                 f"Power: {self.headquarters.power_output}/{self.headquarters.power_usage}",
                 True,
@@ -721,12 +724,9 @@ class ProductionInterface:
         )
         for rect, tab_name in self.tab_buttons:
             pygame.draw.rect(
-                screen,
-                (0, 200, 200) if tab_name == self.current_tab else (50, 50, 50),
-                rect,
-                border_radius=5,
+                surface, (0, 200, 200) if tab_name == self.current_tab else (50, 50, 50), rect, border_radius=5
             )
-            screen.blit(font.render(tab_name, True, (255, 255, 255)), (rect.x + 10, rect.y + 10))
+            surface.blit(font.render(tab_name, True, (255, 255, 255)), (rect.x + 10, rect.y + 10))
         for rect, unit_class, cost_fn, req_fn in self.buttons[self.current_tab]:
             cost = cost_fn(self.headquarters.team) if unit_class else 0
             can_produce = iron >= cost and req_fn()
@@ -735,13 +735,13 @@ class ProductionInterface:
                 if (unit_class and can_produce) or (unit_class is None and selected_building)
                 else (200, 0, 0)
             )
-            pygame.draw.rect(screen, color, rect, border_radius=5)
-            screen.blit(
+            pygame.draw.rect(surface, color, rect, border_radius=5)
+            surface.blit(
                 font.render(f"{self.button_labels[unit_class]} ({cost if unit_class else ''})", True, (255, 255, 255)),
                 (rect.x + 10, rect.y + 10),
             )
         for i, unit_class in enumerate(self.headquarters.production_queue[:5]):
-            screen.blit(
+            surface.blit(
                 font.render(f"{unit_class.__name__} ({unit_class.cost})", True, (255, 255, 255)),
                 (SCREEN_WIDTH - 180, 350 + i * 25),
             )
@@ -749,8 +749,8 @@ class ProductionInterface:
             progress = 1 - self.headquarters.production_timer / self.headquarters.get_production_time(
                 self.headquarters.production_queue[0] if self.headquarters.production_queue else Headquarters
             )
-            pygame.draw.rect(screen, (0, 255, 0), (SCREEN_WIDTH - 180, 340, int(160 * progress), 10))
-            pygame.draw.rect(screen, (255, 255, 255), (SCREEN_WIDTH - 180, 340, 160, 10), 1)
+            pygame.draw.rect(surface, (0, 255, 0), (SCREEN_WIDTH - 180, 340, int(160 * progress), 10))
+            pygame.draw.rect(surface, (255, 255, 255), (SCREEN_WIDTH - 180, 340, 160, 10), 1)
         if self.headquarters.pending_building:
             mouse_pos = pygame.mouse.get_pos()
             world_pos = snap_to_grid(*camera.screen_to_world(mouse_pos))
@@ -773,12 +773,12 @@ class ProductionInterface:
                 (0, 0, building_size[0], building_size[1]),
                 3,
             )
-            screen.blit(
+            surface.blit(
                 temp_surface,
                 (mouse_pos[0] - building_size[0] // 2, mouse_pos[1] - building_size[1] // 2),
             )
 
-    def handle_click(self, pos, iron):
+    def handle_click(self, pos: IntCoord, iron):
         global selected_building
         for rect, tab_name in self.tab_buttons:
             if rect.collidepoint(pos):
@@ -817,24 +817,24 @@ class GameConsole:
         if len(self.lines) > self.max_lines:
             self.lines.pop(0)
 
-    def draw(self, screen):
-        pygame.draw.rect(screen, (40, 40, 40), self.rect)  # Darker console
-        pygame.draw.rect(screen, (80, 80, 80), self.rect, 2)
+    def draw(self, surface: pygame.Surface) -> None:
+        pygame.draw.rect(surface, (40, 40, 40), self.rect)  # Darker console
+        pygame.draw.rect(surface, (80, 80, 80), self.rect, 2)
         visible_lines = self.lines[self.scroll_offset :]
         for i, line in enumerate(visible_lines):
             if i >= self.max_lines:
                 break
             text_surface = console_font.render(line, True, (200, 200, 200))
-            screen.blit(text_surface, (self.rect.x + 5, self.rect.y + 5 + i * 18))
+            surface.blit(text_surface, (self.rect.x + 5, self.rect.y + 5 + i * 18))
         scroll_height = self.rect.height - 20
         scroll_pos = (
             (self.scroll_offset / max(1, len(self.lines) - self.max_lines)) * (scroll_height - 20)
             if len(self.lines) > self.max_lines
             else 0
         )
-        pygame.draw.rect(screen, (150, 150, 150), (self.rect.right - 15, self.rect.y + 5 + scroll_pos, 10, 20))
+        pygame.draw.rect(surface, (150, 150, 150), (self.rect.right - 15, self.rect.y + 5 + scroll_pos, 10, 20))
 
-    def handle_event(self, event):
+    def handle_event(self, event) -> None:
         mouse_pos = pygame.mouse.get_pos()
         if event.type == pygame.MOUSEWHEEL:
             if self.rect.collidepoint(mouse_pos):
@@ -928,7 +928,7 @@ class AI:
             "player_turrets": player_turrets,
         }
 
-    def update_scouting(self):
+    def update_scouting(self) -> None:
         if self.last_scout_update <= 0:
             if not self.scout_targets:
                 self.scout_targets = [(f.rect.centerx, f.rect.centery) for f in self.iron_fields] + [
@@ -974,7 +974,7 @@ class AI:
         targets.sort(key=lambda x: x[1] / x[2])
         return targets[0][0] if targets and targets[0][1] < 250 else None
 
-    def find_valid_building_position(self, building_class):
+    def find_valid_building_position(self, building_class) -> IntCoord:
         closest_field = min(
             self.iron_fields,
             key=lambda f: math.sqrt(
@@ -1228,7 +1228,7 @@ class AI:
                 )
                 unit.target_unit = None
 
-    def update(self):
+    def update(self) -> None:
         self.timer += 1
         self.wave_timer += 1
         self.surprise_attack_cooldown = max(0, self.surprise_attack_cooldown - 1)
@@ -1251,23 +1251,24 @@ class AI:
 if __name__ == "__main__":
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    """The top-level `pygame.Surface`."""
     clock = pygame.time.Clock()
     font = pygame.font.SysFont(None, 24)
     console_font = pygame.font.SysFont(None, 18)
-    player_units = pygame.sprite.Group()
-    enemy_units = pygame.sprite.Group()
-    all_units = pygame.sprite.Group()
-    iron_fields = pygame.sprite.Group()
-    buildings = pygame.sprite.Group()
-    projectiles = pygame.sprite.Group()
-    particles = pygame.sprite.Group()
+    player_units: SpriteGroup = pygame.sprite.Group()
+    enemy_units: SpriteGroup = pygame.sprite.Group()
+    all_units: SpriteGroup = pygame.sprite.Group()
+    iron_fields: SpriteGroup = pygame.sprite.Group()
+    buildings: SpriteGroup = pygame.sprite.Group()
+    projectiles: SpriteGroup = pygame.sprite.Group()
+    particles: SpriteGroup = pygame.sprite.Group()
+    selected_units: SpriteGroup = pygame.sprite.Group()
     gdi_headquarters = Headquarters(300, 300, "GDI")
     nod_headquarters = Headquarters(2000, 1200, "NOD")
     nod_headquarters.iron = 1500
     interface = ProductionInterface(gdi_headquarters)
     console = GameConsole()
     fog_of_war = FogOfWar(MAP_WIDTH, MAP_HEIGHT)
-    selected_units = pygame.sprite.Group()
     selected_building = None
     selecting = False
     select_start = None
