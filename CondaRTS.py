@@ -3,12 +3,13 @@ import random
 
 import pygame
 
-from src.constants import MAP_HEIGHT, MAP_WIDTH
+from src.camera import Camera
+from src.constants import CONSOLE_HEIGHT, MAP_HEIGHT, MAP_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, TILE_SIZE
+from src.fog_of_war import FogOfWar
 from src.game_object import GameObject
+from src.geometry import calculate_formation_positions, snap_to_grid
 from src.particle import Particle
 
-SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
-TILE_SIZE = 32
 BUILDING_RANGE = 160
 BASE_PRODUCTION_TIME = 180
 POWER_PER_PLANT = 100
@@ -16,34 +17,6 @@ GDI_COLOR = (200, 150, 0)  # Brighter yellow for GDI
 NOD_COLOR = (200, 0, 0)  # Brighter red for NOD
 VALID_PLACEMENT_COLOR = (0, 255, 0)
 INVALID_PLACEMENT_COLOR = (255, 0, 0)
-CONSOLE_HEIGHT = 200
-
-
-def calculate_formation_positions(center, target, num_units, direction=None):
-    if num_units == 0:
-        return []
-    max_cols, max_rows = 5, 4
-    spacing = 20
-    positions = []
-    if direction is None and target:
-        dx, dy = target[0] - center[0], target[1] - center[1]
-        angle = math.atan2(dy, dx) if dx != 0 or dy != 0 else 0
-    else:
-        angle = direction if direction is not None else 0
-    cos_a, sin_a = math.cos(angle), math.sin(angle)
-    for i in range(min(num_units, max_cols * max_rows)):
-        row = i // max_cols
-        col = i % max_cols
-        offset_x = (col - (max_cols - 1) / 2) * spacing
-        offset_y = (row - (max_rows - 1) / 2) * spacing
-        rotated_x = offset_x * cos_a - offset_y * sin_a
-        rotated_y = offset_x * sin_a + offset_y * cos_a
-        positions.append((center[0] + rotated_x, center[1] + rotated_y))
-    return positions
-
-
-def snap_to_grid(x, y):
-    return (x // TILE_SIZE) * TILE_SIZE, (y // TILE_SIZE) * TILE_SIZE
 
 
 def is_valid_building_position(x, y, team):
@@ -166,114 +139,6 @@ def handle_projectiles(projectiles, all_units, buildings):
         # Only kill projectile if it has no valid target or moves too far
         elif not (projectile.target and hasattr(projectile.target, "health") and projectile.target.health > 0):
             projectile.kill()
-
-
-class Camera:
-    def __init__(self, map_width, map_height):
-        self.rect = pygame.Rect(0, 0, SCREEN_WIDTH - 200, SCREEN_HEIGHT - CONSOLE_HEIGHT)
-        self.map_width = map_width
-        self.map_height = map_height
-
-    def update(self, selected_units, mouse_pos, interface_rect):
-        mx, my = mouse_pos
-        if interface_rect.collidepoint(mx, my) or my > SCREEN_HEIGHT - CONSOLE_HEIGHT:
-            return
-        if selected_units:
-            avg_x = sum(unit.rect.centerx for unit in selected_units) / len(selected_units)
-            avg_y = sum(unit.rect.centery for unit in selected_units) / len(selected_units)
-            self.rect.center = (
-                max(self.rect.width // 2, min(self.map_width - self.rect.width // 2, avg_x)),
-                max(self.rect.height // 2, min(self.map_height - self.rect.height // 2, avg_y)),
-            )
-        else:
-            if mx < 30 and self.rect.left > 0:
-                self.rect.x -= 10
-            elif mx > SCREEN_WIDTH - 230 and self.rect.right < self.map_width:
-                self.rect.x += 10
-            if my < 30 and self.rect.top > 0:
-                self.rect.y -= 10
-            elif my > SCREEN_HEIGHT - CONSOLE_HEIGHT - 30 and self.rect.bottom < self.map_height:
-                self.rect.y += 10
-        self.rect.clamp_ip(pygame.Rect(0, 0, self.map_width, self.map_height))
-
-    def apply(self, rect):
-        return pygame.Rect(rect.x - self.rect.x, rect.y - self.rect.y, rect.width, rect.height)
-
-    def screen_to_world(self, screen_pos):
-        x, y = screen_pos
-        if y > SCREEN_HEIGHT - CONSOLE_HEIGHT:
-            y = SCREEN_HEIGHT - CONSOLE_HEIGHT
-        return max(0, min(self.map_width, x + self.rect.x)), max(0, min(self.map_height, y + self.rect.y))
-
-
-class FogOfWar:
-    def __init__(self, map_width, map_height, tile_size=TILE_SIZE):
-        self.tile_size = tile_size
-        self.explored = [[False] * (map_height // tile_size) for _ in range(map_width // tile_size)]
-        self.visible = [[False] * (map_height // tile_size) for _ in range(map_width // tile_size)]
-        self.surface = pygame.Surface((map_width, map_height), pygame.SRCALPHA)
-        self.surface.fill((0, 0, 0, 255))
-
-    def reveal(self, center, radius):
-        cx, cy = center
-        tile_x, tile_y = cx // self.tile_size, cy // self.tile_size
-        radius_tiles = radius // self.tile_size
-        for y in range(
-            max(0, tile_y - radius_tiles),
-            min(len(self.explored[0]), tile_y + radius_tiles + 1),
-        ):
-            for x in range(max(0, tile_x - radius_tiles), min(len(self.explored), tile_x + radius_tiles + 1)):
-                if (
-                    math.sqrt(
-                        (cx - (x * self.tile_size + self.tile_size // 2)) ** 2
-                        + (cy - (y * self.tile_size + self.tile_size // 2)) ** 2
-                    )
-                    <= radius
-                ):
-                    self.explored[x][y] = True
-                    self.visible[x][y] = True
-
-    def update_visibility(self, units, buildings, team):
-        self.visible = [[False] * len(self.explored[0]) for _ in range(len(self.explored))]
-        for unit in units:
-            if unit.team == team and hasattr(unit, "rect"):
-                self.reveal(unit.rect.center, 150)
-        for building in buildings:
-            if building.team == team and hasattr(building, "rect"):
-                self.reveal(building.rect.center, 200)
-            if hasattr(building, "rect") and building.health > 0:
-                tile_x, tile_y = (
-                    int(building.rect.centerx // self.tile_size),
-                    int(building.rect.centery // self.tile_size),
-                )
-                if 0 <= tile_x < len(self.visible) and 0 <= tile_y < len(self.visible[0]):
-                    self.visible[tile_x][tile_y] = True
-                    building.is_seen = True
-
-    def is_tile_visible(self, x, y):
-        tile_x, tile_y = int(x // self.tile_size), int(y // self.tile_size)
-        if 0 <= tile_x < len(self.visible) and 0 <= tile_y < len(self.visible[0]):
-            return self.visible[tile_x][tile_y]
-        return False
-
-    def is_tile_explored(self, x, y):
-        tile_x, tile_y = int(x // self.tile_size), int(y // self.tile_size)
-        if 0 <= tile_x < len(self.explored) and 0 <= tile_y < len(self.explored[0]):
-            return self.explored[tile_x][tile_y]
-        return False
-
-    def draw(self, screen, camera):
-        self.surface.fill((0, 0, 0, 255))
-        for y in range(len(self.explored[0])):
-            for x in range(len(self.explored)):
-                if self.explored[x][y]:
-                    alpha = 0 if self.visible[x][y] else 100
-                    pygame.draw.rect(
-                        self.surface,
-                        (0, 0, 0, alpha),
-                        (x * self.tile_size, y * self.tile_size, self.tile_size, self.tile_size),
-                    )
-        screen.blit(self.surface, (-camera.rect.x, -camera.rect.y))
 
 
 class Tank(GameObject):

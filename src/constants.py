@@ -1,3 +1,6 @@
 """Constants used by `src` modules."""
 
 MAP_WIDTH, MAP_HEIGHT = 3200, 2400
+TILE_SIZE = 32
+SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
+CONSOLE_HEIGHT = 200
