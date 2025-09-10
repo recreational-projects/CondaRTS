@@ -13,6 +13,9 @@ if TYPE_CHECKING:
 
 
 class GameObject(pygame.sprite.Sprite):
+    ATTACK_RANGE = 0
+    ATTACK_COOLDOWN = 0
+
     def __init__(self, *, position: IntCoord, team: Literal["GDI", "NOD"]) -> None:
         super().__init__()
         self.rect: pygame.Rect = pygame.Rect(position, (0, 0))  # Nominal, overridden
@@ -22,9 +25,7 @@ class GameObject(pygame.sprite.Sprite):
         self.speed: float = 0
         self.health = 0
         self.max_health = 0
-        self.attack_range = 0
         self.attack_damage = 0
-        self.attack_cooldown = 0
         self.cooldown_timer = 0
         self.selected = False
         self.power_usage = 0
@@ -44,7 +45,7 @@ class GameObject(pygame.sprite.Sprite):
                 self.target[1] - self.rect.centery,
             )
             dist = math.sqrt(dx**2 + dy**2)
-            if dist > self.attack_range:
+            if dist > self.ATTACK_RANGE:
                 if dist > 5:
                     self.rect.x += self.speed * dx / dist
                     self.rect.y += self.speed * dy / dist

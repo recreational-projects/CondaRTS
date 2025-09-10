@@ -78,7 +78,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                     (unit.rect.centerx - unit.target_unit.rect.centerx) ** 2
                     + (unit.rect.centery - unit.target_unit.rect.centery) ** 2
                 )
-                if dist <= unit.attack_range:
+                if dist <= unit.ATTACK_RANGE:
                     closest_target, min_dist = unit.target_unit, dist
 
             if not closest_target:
@@ -88,7 +88,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                             (unit.rect.centerx - target.rect.centerx) ** 2
                             + (unit.rect.centery - target.rect.centery) ** 2
                         )
-                        if dist <= unit.attack_range and dist < min_dist:
+                        if dist <= unit.ATTACK_RANGE and dist < min_dist:
                             closest_target, min_dist = target, dist
 
                 for building in buildings:
@@ -97,7 +97,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                             (unit.rect.centerx - building.rect.centerx) ** 2
                             + (unit.rect.centery - building.rect.centery) ** 2
                         )
-                        if dist <= unit.attack_range and dist < min_dist:
+                        if dist <= unit.ATTACK_RANGE and dist < min_dist:
                             closest_target, min_dist = building, dist
 
             if closest_target:
@@ -129,7 +129,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                         closest_target.kill()
                         unit.target = unit.target_unit = None
 
-                unit.cooldown_timer = unit.attack_cooldown
+                unit.cooldown_timer = unit.ATTACK_COOLDOWN
 
 
 def handle_projectiles(projectiles, all_units, buildings) -> None:
@@ -162,6 +162,8 @@ def handle_projectiles(projectiles, all_units, buildings) -> None:
 
 
 class Tank(GameObject):
+    ATTACK_RANGE = 200
+    ATTACK_COOLDOWN = 50
     cost = 500
 
     def __init__(self, position: IntCoord, team) -> None:
@@ -179,9 +181,7 @@ class Tank(GameObject):
         self.speed = 2.5 if team == "GDI" else 3
         self.health = 200 if team == "GDI" else 120
         self.max_health = self.health
-        self.attack_range = 200
         self.attack_damage = 20 if team == "GDI" else 15
-        self.attack_cooldown = 50
         self.angle: float = 0
         self.recoil = 0
         self.power_usage = 15
@@ -224,6 +224,8 @@ class Tank(GameObject):
 
 
 class Infantry(GameObject):
+    ATTACK_RANGE = 50
+    ATTACK_COOLDOWN = 25
     cost = 100
 
     def __init__(self, position: IntCoord, team) -> None:
@@ -238,9 +240,7 @@ class Infantry(GameObject):
         self.speed = 3.5 if team == "GDI" else 4
         self.health = 100 if team == "GDI" else 60
         self.max_health = self.health
-        self.attack_range = 50
         self.attack_damage = 8
-        self.attack_cooldown = 25
         self.power_usage = 5
         self.target_unit = None
 
@@ -262,6 +262,8 @@ class Infantry(GameObject):
 
 
 class Harvester(GameObject):
+    ATTACK_RANGE = 50
+    ATTACK_COOLDOWN = 30
     cost = 800
 
     def __init__(self, position: IntCoord, team, headquarters) -> None:
@@ -283,9 +285,7 @@ class Harvester(GameObject):
         self.target_field = None
         self.harvest_time = 40
         self.power_usage = 20
-        self.attack_range = 50
         self.attack_damage = 10
-        self.attack_cooldown = 30
         self.target_unit = None
 
     def update(self) -> None:
@@ -298,14 +298,14 @@ class Harvester(GameObject):
             )
             for u in live_enemy_infantry:
                 dist = math.sqrt((self.rect.centerx - u.rect.centerx) ** 2 + (self.rect.centery - u.rect.centery) ** 2)
-                if dist < self.attack_range and dist < min_dist:
+                if dist < Harvester.ATTACK_RANGE and dist < min_dist:
                     closest_target, min_dist = u, dist
 
             if closest_target:
                 closest_target.health -= self.attack_damage
                 if closest_target.health <= 0:
                     closest_target.kill()
-                self.cooldown_timer = self.attack_cooldown
+                self.cooldown_timer = Harvester.ATTACK_COOLDOWN
 
         if self.state == "moving_to_field":
             if not self.target_field or self.target_field.resources <= 0:
@@ -552,13 +552,14 @@ class PowerPlant(Building):
 class Turret(Building):
     SIZE = (50, 50)
     POWER_USAGE = 25
+    ATTACK_RANGE = 180
+    ATTACK_COOLDOWN = 25
+
     cost = 600
 
     def __init__(self, position: IntCoord, team) -> None:
         super().__init__(position, team, (180, 180, 0) if team == "GDI" else (180, 0, 0), 500, self.cost)
-        self.attack_range = 180
         self.attack_damage = 15
-        self.attack_cooldown = 25
         self.cooldown_timer = 0
         self.target_unit = None
         self.angle: float = 0
@@ -572,7 +573,7 @@ class Turret(Building):
             closest_target, min_dist = None, float("inf")
             for u in live_enemy_units:
                 dist = math.sqrt((self.rect.centerx - u.rect.centerx) ** 2 + (self.rect.centery - u.rect.centery) ** 2)
-                if dist < self.attack_range and dist < min_dist:
+                if dist < Turret.ATTACK_RANGE and dist < min_dist:
                     closest_target, min_dist = u, dist
             if closest_target:
                 self.target_unit = closest_target
@@ -586,7 +587,7 @@ class Turret(Building):
                         position=self.rect.center, target=closest_target, damage=self.attack_damage, team=self.team
                     )
                 )
-                self.cooldown_timer = self.attack_cooldown
+                self.cooldown_timer = Turret.ATTACK_COOLDOWN
                 particles.add(Particle.smoke_cloud(self.rect))
             else:
                 self.target_unit = None
