@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 import pygame
 
-from src.camera import Camera
 from src.constants import TILE_SIZE
 from src.geometry import grid_index
+
+if TYPE_CHECKING:
+    from src.camera import Camera
 
 
 class FogOfWar:
@@ -65,7 +68,7 @@ class FogOfWar:
             return self.explored[tile_x][tile_y]
         return False
 
-    def draw(self, screen, camera: Camera) -> None:
+    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
         self.surface.fill((0, 0, 0, 255))
         for y in range(len(self.explored[0])):
             for x in range(len(self.explored)):
@@ -76,4 +79,4 @@ class FogOfWar:
                         (0, 0, 0, alpha),
                         (x * self.tile_size, y * self.tile_size, self.tile_size, self.tile_size),
                     )
-        screen.blit(self.surface, (-camera.rect.x, -camera.rect.y))
+        surface.blit(self.surface, (-camera.rect.x, -camera.rect.y))
