@@ -16,7 +16,7 @@ class GameObject(pygame.sprite.Sprite):
         super().__init__()
         self.rect: pygame.Rect = pygame.Rect((x, y), (0, 0))  # Nominal, overridden
         self.team = team
-        self.target = None
+        self.target: tuple[int, int] | None = None
         self.formation_target = None
         self.speed = 0
         self.health = 0
