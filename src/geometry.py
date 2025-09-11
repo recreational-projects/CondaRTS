@@ -13,7 +13,7 @@ FloatCoord: TypeAlias = tuple[float, float]
 
 def grid_index(x: float, y: float) -> IntCoord:
     """Return the grid tile index coordinate containing the position."""
-    return x // TILE_SIZE, y // TILE_SIZE
+    return int(x // TILE_SIZE), int(y // TILE_SIZE)
 
 
 def snap_to_grid(x: float, y: float) -> IntCoord:

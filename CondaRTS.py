@@ -325,12 +325,18 @@ class Harvester(GameObject):
             if self.harvest_time > 0:
                 self.harvest_time -= 1
             else:
+                if not self.target_field:
+                    raise TypeError("No target field")  # Temporary handling, review later
+
                 harvested = min(self.target_field.resources, self.capacity)
                 self.iron += harvested
                 self.target_field.resources -= harvested
                 self.state = "returning"
                 self.target = self.headquarters.rect.center
         elif self.state == "returning":
+            if not self.target:
+                raise TypeError("No target")  # Temporary handling, review later
+
             if math.sqrt((self.rect.centerx - self.target[0]) ** 2 + (self.rect.centery - self.target[1]) ** 2) < 30:
                 self.headquarters.iron += self.iron
                 self.iron = 0
@@ -968,7 +974,10 @@ class AI:
         else:
             self.last_scout_update -= 1
 
-    def prioritize_targets(self, unit: GameObject) -> GameObject | None:
+    def prioritize_targets(self, unit: GameObject | None) -> GameObject | None:
+        if not unit:
+            raise TypeError("No unit")
+
         targets = []
         for target in self.all_units:
             if target.team != unit.team and target.health > 0:
@@ -1358,7 +1367,8 @@ if __name__ == "__main__":
                         select_rect = pygame.Rect(target_x, target_y, 0, 0)
                 elif event.button == 3:
                     if gdi_headquarters.pending_building:
-                        gdi_headquarters.pending_building = gdi_headquarters.pending_building_pos = None
+                        gdi_headquarters.pending_building = None
+                        gdi_headquarters.pending_building_pos = None
                         if gdi_headquarters.production_queue and gdi_headquarters.has_enough_power:
                             gdi_headquarters.production_timer = gdi_headquarters.get_production_time(
                                 gdi_headquarters.production_queue[0]
@@ -1406,7 +1416,7 @@ if __name__ == "__main__":
                                 unit.formation_target = None
             elif event.type == pygame.MOUSEMOTION and selecting:
                 current_pos = event.pos
-                if select_start is None:
+                if not select_start:
                     raise TypeError("No selection rect start point")  # Temporary handling, review later
 
                 select_rect = pygame.Rect(
@@ -1416,7 +1426,7 @@ if __name__ == "__main__":
                     abs(current_pos[1] - select_start[1]),
                 )
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and selecting:
-                if select_start is None:
+                if not select_start:
                     raise TypeError("No selection rect start point")  # Temporary handling, review later
 
                 selecting = False
