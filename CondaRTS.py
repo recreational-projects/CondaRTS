@@ -12,6 +12,7 @@ from src.fog_of_war import FogOfWar
 from src.game_console import GameConsole
 from src.game_object import GameObject
 from src.geometry import FloatCoord, IntCoord, calculate_formation_positions, snap_to_grid
+from src.iron_field import IronField
 from src.particle import Particle
 
 BUILDING_RANGE = 160
@@ -623,33 +624,6 @@ class Projectile(pygame.sprite.Sprite):
 
     def draw(self, surface: pygame.Surface, camera: Camera) -> None:
         surface.blit(self.image, camera.apply(self.rect).topleft)
-
-
-class IronField(pygame.sprite.Sprite):
-    def __init__(self, x, y, resources=5000) -> None:
-        super().__init__()
-        self.image = pygame.Surface((40, 40), pygame.SRCALPHA)
-        pygame.draw.polygon(
-            self.image, (0, 200, 0), [(0, 20), (20, 0), (40, 20), (20, 40)]
-        )  # Diamond shape for crystal
-        self.rect = self.image.get_rect(topleft=(x, y))
-        self.resources = resources
-        self.regen_timer = 500
-
-    def update(self) -> None:
-        if self.regen_timer > 0:
-            self.regen_timer -= 1
-        else:
-            self.resources = min(5000, self.resources + 15)
-            self.regen_timer = 500
-        self.image.set_alpha(int(255 * self.resources / 5000))
-
-    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
-        surface.blit(self.image, camera.apply(self.rect).topleft)
-        surface.blit(
-            font.render(f"{self.resources}", True, (255, 255, 255)),
-            (camera.apply(self.rect).x, camera.apply(self.rect).y - 20),
-        )
 
 
 class ProductionInterface:
@@ -1269,7 +1243,9 @@ if __name__ == "__main__":
     global_units.add(player_units, ai_units)
     global_buildings.add(gdi_headquarters, nod_headquarters)
     for _ in range(40):
-        iron_fields.add(IronField(random.randint(100, MAP_WIDTH - 100), random.randint(100, MAP_HEIGHT - 100)))
+        iron_fields.add(
+            IronField(random.randint(100, MAP_WIDTH - 100), random.randint(100, MAP_HEIGHT - 100), font=font)
+        )
 
     running = True
     while running:
