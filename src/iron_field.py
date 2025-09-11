@@ -6,10 +6,11 @@ import pygame
 
 if TYPE_CHECKING:
     from src.camera import Camera
+    from src.geometry import IntCoord
 
 
 class IronField(pygame.sprite.Sprite):
-    def __init__(self, x, y, *, font: pygame.Font, resources=5000) -> None:
+    def __init__(self, *, position: IntCoord, font: pygame.Font, resources=5000) -> None:
         super().__init__()
         self.image = pygame.Surface((40, 40), pygame.SRCALPHA)
         pygame.draw.polygon(
@@ -17,7 +18,7 @@ class IronField(pygame.sprite.Sprite):
             (0, 200, 0),
             [(0, 20), (20, 0), (40, 20), (20, 40)],
         )  # Diamond shape for crystal
-        self.rect = self.image.get_rect(topleft=(x, y))
+        self.rect = self.image.get_rect(topleft=position)
         self.resources = resources
         self.font = font
         self.regen_timer = 500
@@ -28,6 +29,7 @@ class IronField(pygame.sprite.Sprite):
         else:
             self.resources = min(5000, self.resources + 15)
             self.regen_timer = 500
+
         self.image.set_alpha(int(255 * self.resources / 5000))
 
     def draw(self, surface: pygame.Surface, camera: Camera) -> None:

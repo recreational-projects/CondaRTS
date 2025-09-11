@@ -9,13 +9,13 @@ from src.constants import MAP_HEIGHT, MAP_WIDTH
 
 if TYPE_CHECKING:
     from src.camera import Camera
-    from src.geometry import FloatCoord
+    from src.geometry import FloatCoord, IntCoord
 
 
 class GameObject(pygame.sprite.Sprite):
-    def __init__(self, *, x: int, y: int, team: Literal["GDI", "NOD"]) -> None:
+    def __init__(self, *, position: IntCoord, team: Literal["GDI", "NOD"]) -> None:
         super().__init__()
-        self.rect: pygame.Rect = pygame.Rect((x, y), (0, 0))  # Nominal, overridden
+        self.rect: pygame.Rect = pygame.Rect(position, (0, 0))  # Nominal, overridden
         self.team = team
         self.target: FloatCoord | None = None
         self.formation_target = None

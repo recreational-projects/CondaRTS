@@ -25,7 +25,7 @@ class FogOfWar:
         self.surface.fill((0, 0, 0, 255))
 
     def reveal(self, center: FloatCoord, radius: int) -> None:
-        tile_x, tile_y = grid_index(*center)
+        tile_x, tile_y = grid_index(center)
         cx, cy = center
         radius_tiles = radius // self.tile_size
         for y in range(
@@ -48,9 +48,11 @@ class FogOfWar:
         for unit in units:
             if unit.team == team and hasattr(unit, "rect"):
                 self.reveal(unit.rect.center, 150)
+
         for building in buildings:
             if building.team == team and hasattr(building, "rect"):
                 self.reveal(building.rect.center, 200)
+
             if hasattr(building, "rect") and building.health > 0:
                 tile_x, tile_y = (
                     int(building.rect.centerx // self.tile_size),
@@ -60,16 +62,20 @@ class FogOfWar:
                     self.visible[tile_x][tile_y] = True
                     building.is_seen = True
 
-    def is_tile_visible(self, x: int, y: int) -> bool:
-        tile_x, tile_y = grid_index(x, y)
+    def is_tile_visible(self, position: FloatCoord) -> bool:
+        """Return whether tile at position (not tile coord) is visible."""
+        tile_x, tile_y = grid_index(position)
         if 0 <= tile_x < len(self.visible) and 0 <= tile_y < len(self.visible[0]):
             return self.visible[tile_x][tile_y]
+
         return False
 
-    def is_tile_explored(self, x: float, y: float) -> bool:
-        tile_x, tile_y = grid_index(x, y)
+    def is_tile_explored(self, position: FloatCoord) -> bool:
+        """Return whether tile at position (not tile coord) is explored."""
+        tile_x, tile_y = grid_index(position)
         if 0 <= tile_x < len(self.explored) and 0 <= tile_y < len(self.explored[0]):
             return self.explored[tile_x][tile_y]
+
         return False
 
     def draw(self, surface: pygame.Surface, camera: Camera) -> None:

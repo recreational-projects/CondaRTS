@@ -29,22 +29,27 @@ INVALID_PLACEMENT_COLOR = (255, 0, 0)
 SpriteGroup: TypeAlias = pygame.sprite.Group[Any]
 
 
-def _is_in_building_range(*, x, y, team) -> bool:
-    live_friendly_buildings = {b for b in global_buildings if b.team == team and b.health > 0}
+def _is_in_building_range(*, position: FloatCoord, team) -> bool:
+    """Return whether position is within range of friendly buildings."""
+    x, y = position
+    live_friendly_buildings = pygame.sprite.Group(b for b in global_buildings if b.team == team and b.health > 0)
     return any(
-        math.sqrt((x - b.rect.centerx) ** 2 + (y - b.rect.centery) ** 2) <= BUILDING_RANGE
-        for b in live_friendly_buildings
+        ((x - b.rect.centerx) ** 2 + (y - b.rect.centery) ** 2) <= BUILDING_RANGE**2 for b in live_friendly_buildings
     )
 
 
-def _collides_with_building(*, x, y, cls: type[Building]) -> bool:
-    live_buildings = {b for b in global_buildings if b.health > 0}
-    new_rect = pygame.Rect((x, y), cls.SIZE)
+def _collides_with_building(*, position: FloatCoord, cls: type[Building]) -> bool:
+    """Return whether position collides with any building."""
+    live_buildings = pygame.sprite.Group(b for b in global_buildings if b.health > 0)
+    new_rect = pygame.Rect(position, cls.SIZE)
     return any(new_rect.colliderect(b.rect) for b in live_buildings)
 
 
-def is_valid_building_position(x, y, *, team, cls: type[Building]) -> bool:
-    return _is_in_building_range(x=x, y=y, team=team) and not _collides_with_building(x=x, y=y, cls=cls)
+def is_valid_building_position(*, position: FloatCoord, team, cls: type[Building]) -> bool:
+    """Return whether position is valid for the new building."""
+    return _is_in_building_range(position=position, team=team) and not _collides_with_building(
+        position=position, cls=cls
+    )
 
 
 def handle_collisions(units) -> None:
@@ -75,6 +80,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                 )
                 if dist <= unit.attack_range:
                     closest_target, min_dist = unit.target_unit, dist
+
             if not closest_target:
                 for target in all_units:
                     if target.team != unit.team and target.health > 0:
@@ -84,6 +90,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                         )
                         if dist <= unit.attack_range and dist < min_dist:
                             closest_target, min_dist = target, dist
+
                 for building in buildings:
                     if building.team != unit.team and building.health > 0:
                         dist = math.sqrt(
@@ -92,6 +99,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                         )
                         if dist <= unit.attack_range and dist < min_dist:
                             closest_target, min_dist = building, dist
+
             if closest_target:
                 unit.target_unit = closest_target
                 unit.target = closest_target.rect.center
@@ -102,23 +110,25 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                     )
                     unit.angle = math.degrees(math.atan2(dy, dx))  # Updated to match Tank's angle calculation
                     projectiles.add(
-                        Projectile(unit.rect.centerx, unit.rect.centery, closest_target, unit.attack_damage, unit.team)
+                        Projectile(
+                            position=unit.rect.center, target=closest_target, damage=unit.attack_damage, team=unit.team
+                        )
                     )
                     unit.recoil = 5
                     barrel_angle = math.radians(unit.angle)
-                    particles.add(
-                        Particle.smoke_cloud(
-                            unit.rect.centerx + math.cos(barrel_angle) * (unit.rect.width // 2 + 12),
-                            unit.rect.centery + math.sin(barrel_angle) * (unit.rect.width // 2 + 12),
-                        )
+                    pos = (
+                        unit.rect.centerx + math.cos(barrel_angle) * (unit.rect.width // 2 + 12),
+                        unit.rect.centery + math.sin(barrel_angle) * (unit.rect.width // 2 + 12),
                     )
+                    particles.add(Particle.smoke_cloud(pos))
                 else:
                     closest_target.health -= unit.attack_damage
                     closest_target.under_attack = True  # Set under_attack only when damage is applied
-                    particles.add(Particle.damage_cloud_small(unit.rect.centerx, unit.rect.centery))
+                    particles.add(Particle.damage_cloud_small(unit.rect.center))
                     if closest_target.health <= 0:
                         closest_target.kill()
                         unit.target = unit.target_unit = None
+
                 unit.cooldown_timer = unit.attack_cooldown
 
 
@@ -130,17 +140,18 @@ def handle_projectiles(projectiles, all_units, buildings) -> None:
             if target.team != projectile.team and target.health > 0 and projectile.rect.colliderect(target.rect):
                 target.health -= projectile.damage
                 target.under_attack = True  # Set under_attack when damage is applied
-                particles.add(Particle.damage_cloud_large(projectile.rect.centerx, projectile.rect.centery))
+                particles.add(Particle.damage_cloud_large(projectile.rect.center))
                 if target.health <= 0:
                     target.kill()
                 hit = True
                 break
+
         if not hit:
             for target in buildings:
                 if target.team != projectile.team and target.health > 0 and projectile.rect.colliderect(target.rect):
                     target.health -= projectile.damage
                     target.under_attack = True  # Set under_attack when damage is applied
-                    particles.add(Particle.damage_cloud_large(projectile.rect.centerx, projectile.rect.centery))
+                    particles.add(Particle.damage_cloud_large(projectile.rect.center))
                     if target.health <= 0:
                         target.kill()
                     hit = True
@@ -153,8 +164,8 @@ def handle_projectiles(projectiles, all_units, buildings) -> None:
 class Tank(GameObject):
     cost = 500
 
-    def __init__(self, x, y, team) -> None:
-        super().__init__(x=x, y=y, team=team)
+    def __init__(self, position: IntCoord, team) -> None:
+        super().__init__(position=position, team=team)
         self.base_image = pygame.Surface((30, 20), pygame.SRCALPHA)
         # Draw tank body (front facing east/right)
         pygame.draw.rect(self.base_image, (100, 100, 100), (0, 0, 30, 20))  # Hull
@@ -164,7 +175,7 @@ class Tank(GameObject):
         self.barrel_image = pygame.Surface((20, 4), pygame.SRCALPHA)
         pygame.draw.rect(self.barrel_image, (70, 70, 70), (0, 0, 20, 4))  # Barrel (extends right)
         self.image = self.base_image
-        self.rect = self.image.get_rect(center=(x, y))
+        self.rect = self.image.get_rect(center=position)
         self.speed = 2.5 if team == "GDI" else 3
         self.health = 200 if team == "GDI" else 120
         self.max_health = self.health
@@ -183,8 +194,9 @@ class Tank(GameObject):
                 (self.rect.centerx - self.target_unit.rect.centerx) ** 2
                 + (self.rect.centery - self.target_unit.rect.centery) ** 2
             )
-            self.target = (self.target_unit.rect.centerx, self.target_unit.rect.centery) if dist <= 250 else None
+            self.target = self.target_unit.rect.center if dist <= 250 else None
             self.target_unit = self.target_unit if self.target else None
+
         if self.target:
             dx, dy = (self.target[0] - self.rect.centerx, self.target[1] - self.rect.centery)
             self.angle = math.degrees(math.atan2(dy, dx))  # Use dy instead of -dy to fix vertical direction
@@ -214,15 +226,15 @@ class Tank(GameObject):
 class Infantry(GameObject):
     cost = 100
 
-    def __init__(self, x, y, team) -> None:
-        super().__init__(x=x, y=y, team=team)
+    def __init__(self, position: IntCoord, team) -> None:
+        super().__init__(position=position, team=team)
         self.image = pygame.Surface((16, 16), pygame.SRCALPHA)
         # Draw infantry as a simple soldier
         pygame.draw.circle(self.image, (150, 150, 150), (8, 4), 4)  # Head
         pygame.draw.rect(self.image, (100, 100, 100), (6, 8, 4, 8))  # Body
         pygame.draw.line(self.image, (80, 80, 80), (8, 16), (8, 20))  # Legs
         pygame.draw.line(self.image, (120, 120, 120), (10, 10), (14, 10))  # Gun
-        self.rect = self.image.get_rect(center=(x, y))
+        self.rect = self.image.get_rect(center=position)
         self.speed = 3.5 if team == "GDI" else 4
         self.health = 100 if team == "GDI" else 60
         self.max_health = self.health
@@ -252,15 +264,15 @@ class Infantry(GameObject):
 class Harvester(GameObject):
     cost = 800
 
-    def __init__(self, x, y, team, headquarters) -> None:
-        super().__init__(x=x, y=y, team=team)
+    def __init__(self, position: IntCoord, team, headquarters) -> None:
+        super().__init__(position=position, team=team)
         self.image = pygame.Surface((50, 30), pygame.SRCALPHA)
         # Draw harvester as a truck
         pygame.draw.rect(self.image, (120, 120, 120), (0, 0, 50, 30))  # Body
         pygame.draw.rect(self.image, (100, 100, 100), (5, 5, 40, 20))  # Cargo area
         pygame.draw.circle(self.image, (50, 50, 50), (10, 30), 5)  # Wheel 1
         pygame.draw.circle(self.image, (50, 50, 50), (40, 30), 5)  # Wheel 2
-        self.rect = self.image.get_rect(center=(x, y))
+        self.rect = self.image.get_rect(center=position)
         self.speed = 2.5
         self.health = 300
         self.max_health = self.health
@@ -280,14 +292,15 @@ class Harvester(GameObject):
         super().update()
         if self.cooldown_timer == 0:
             closest_target, min_dist = None, float("inf")
-            _units = set(global_units)
-            live_enemy_infantry = {
+            _units = pygame.sprite.Group(global_units)
+            live_enemy_infantry = pygame.sprite.Group(
                 u for u in _units if all((u.team != self.team, u.health > 0, isinstance(u, Infantry)))
-            }
+            )
             for u in live_enemy_infantry:
                 dist = math.sqrt((self.rect.centerx - u.rect.centerx) ** 2 + (self.rect.centery - u.rect.centery) ** 2)
                 if dist < self.attack_range and dist < min_dist:
                     closest_target, min_dist = u, dist
+
             if closest_target:
                 closest_target.health -= self.attack_damage
                 if closest_target.health <= 0:
@@ -360,8 +373,8 @@ class Building(GameObject):
     CONSTRUCTION_TIME = 50
     POWER_USAGE = 0  # overridden for some subclasses
 
-    def __init__(self, x, y, team, color, health, cost) -> None:
-        super().__init__(x=x, y=y, team=team)
+    def __init__(self, position: IntCoord, team, color, health, cost) -> None:
+        super().__init__(position=position, team=team)
         self.image = pygame.Surface(self.SIZE, pygame.SRCALPHA)
         # Add details to building
         pygame.draw.rect(self.image, color, ((0, 0), self.SIZE))  # Base
@@ -371,7 +384,7 @@ class Building(GameObject):
         for i in range(10, self.SIZE[0] - 10, 20):
             pygame.draw.rect(self.image, (200, 200, 200), (i, 10, 10, 10))  # Windows
 
-        self.rect = self.image.get_rect(topleft=(x, y))
+        self.rect = self.image.get_rect(topleft=position)
         self.health = health
         self.max_health = health
         self.cost = cost
@@ -385,7 +398,7 @@ class Building(GameObject):
 
         super().update()
         if self.health <= 0:
-            particles.add(Particle.building_explosion(self.rect.centerx, self.rect.centery))
+            particles.add(Particle.building_explosion(self.rect.center))
             self.kill()
 
     def draw(self, surface: pygame.Surface, camera: Camera) -> None:
@@ -397,8 +410,8 @@ class Headquarters(Building):
     SIZE = (80, 80)
     cost = 2000
 
-    def __init__(self, x, y, team) -> None:
-        super().__init__(x, y, team, GDI_COLOR if team == "GDI" else NOD_COLOR, 1200, self.cost)
+    def __init__(self, position: IntCoord, team) -> None:
+        super().__init__(position, team, GDI_COLOR if team == "GDI" else NOD_COLOR, 1200, self.cost)
         self.iron = 1500
         self.production_queue: list[type] = []
         self.production_timer: float = 0
@@ -409,8 +422,9 @@ class Headquarters(Building):
         self.power_output = 0
 
     def get_production_time(self, unit_class) -> float:
-        _buildings = set(global_buildings)
-        live_friendly_buildings = {b for b in _buildings if b.team == self.team and b.health > 0}
+        live_friendly_buildings = pygame.sprite.Group(
+            b for b in global_buildings if b.team == self.team and b.health > 0
+        )
         base_time = BASE_PRODUCTION_TIME
         if unit_class == Infantry:
             barracks_count = len({b for b in live_friendly_buildings if isinstance(b, Barracks)})
@@ -423,12 +437,9 @@ class Headquarters(Building):
         return base_time
 
     def update(self) -> None:
-        _buildings = set(global_buildings)
-        friendly_buildings = {b for b in _buildings if b.team == self.team}
-        live_friendly_buildings = {b for b in friendly_buildings if b.health > 0}
-
-        _units = set(global_units)
-        friendly_units = {u for u in _units if u.team == self.team}
+        friendly_buildings = pygame.sprite.Group(b for b in global_buildings if b.team == self.team)
+        live_friendly_buildings = pygame.sprite.Group(b for b in friendly_buildings if b.health > 0)
+        friendly_units = pygame.sprite.Group(u for u in global_units if u.team == self.team)
 
         self.power_usage = sum(u.power_usage for u in friendly_units) + sum(b.power_usage for b in friendly_buildings)
         self.power_output = self.base_power + sum(
@@ -456,7 +467,7 @@ class Headquarters(Building):
                 else:
                     spawn_building = self
                     if unit_class == Infantry:
-                        barracks = {b for b in live_friendly_buildings if isinstance(b, Barracks)}
+                        barracks = pygame.sprite.Group(b for b in live_friendly_buildings if isinstance(b, Barracks))
                         if not barracks:
                             return
                         spawn_building = min(
@@ -466,7 +477,9 @@ class Headquarters(Building):
                             ),
                         )
                     elif unit_class in [Tank, Harvester]:
-                        war_factories = {b for b in live_friendly_buildings if isinstance(b, WarFactory)}
+                        war_factories = pygame.sprite.Group(
+                            b for b in live_friendly_buildings if isinstance(b, WarFactory)
+                        )
                         if not war_factories:
                             return
                         spawn_building = min(
@@ -499,10 +512,10 @@ class Headquarters(Building):
                 )
         super().update()
 
-    def place_building(self, x, y, *, cls: type[Building]) -> None:
-        x, y = snap_to_grid(x, y)
-        if is_valid_building_position(x, y, team=self.team, cls=cls):
-            global_buildings.add(cls(x, y, self.team))
+    def place_building(self, *, position: FloatCoord, cls: type[Building]) -> None:
+        snap_position = snap_to_grid(position)
+        if is_valid_building_position(position=snap_position, team=self.team, cls=cls):
+            global_buildings.add(cls(snap_position, self.team))
             self.pending_building = None
             self.pending_building_pos = None
             if self.production_queue and self.has_enough_power:
@@ -517,23 +530,23 @@ class Barracks(Building):
     POWER_USAGE = 25
     cost = 500
 
-    def __init__(self, x, y, team) -> None:
-        super().__init__(x, y, team, (150, 150, 0) if team == "GDI" else (150, 0, 0), 600, self.cost)
+    def __init__(self, position: IntCoord, team) -> None:
+        super().__init__(position, team, (150, 150, 0) if team == "GDI" else (150, 0, 0), 600, self.cost)
 
 
 class WarFactory(Building):
     POWER_USAGE = 35
     cost = 1000
 
-    def __init__(self, x, y, team) -> None:
-        super().__init__(x, y, team, (170, 170, 0) if team == "GDI" else (170, 0, 0), 800, self.cost)
+    def __init__(self, position: IntCoord, team) -> None:
+        super().__init__(position, team, (170, 170, 0) if team == "GDI" else (170, 0, 0), 800, self.cost)
 
 
 class PowerPlant(Building):
     cost = 300
 
-    def __init__(self, x, y, team) -> None:
-        super().__init__(x, y, team, (130, 130, 0) if team == "GDI" else (130, 0, 0), 500, self.cost)
+    def __init__(self, position: IntCoord, team) -> None:
+        super().__init__(position, team, (130, 130, 0) if team == "GDI" else (130, 0, 0), 500, self.cost)
 
 
 class Turret(Building):
@@ -541,8 +554,8 @@ class Turret(Building):
     POWER_USAGE = 25
     cost = 600
 
-    def __init__(self, x, y, team) -> None:
-        super().__init__(x, y, team, (180, 180, 0) if team == "GDI" else (180, 0, 0), 500, self.cost)
+    def __init__(self, position: IntCoord, team) -> None:
+        super().__init__(position, team, (180, 180, 0) if team == "GDI" else (180, 0, 0), 500, self.cost)
         self.attack_range = 180
         self.attack_damage = 15
         self.attack_cooldown = 25
@@ -551,8 +564,7 @@ class Turret(Building):
         self.angle: float = 0
 
     def update(self) -> None:
-        _units = set(global_units)
-        live_enemy_units = {u for u in _units if u.team != self.team and u.health > 0}
+        live_enemy_units = pygame.sprite.Group(u for u in global_units if u.team != self.team and u.health > 0)
         super().update()
         if self.cooldown_timer > 0:
             self.cooldown_timer -= 1
@@ -570,12 +582,15 @@ class Turret(Building):
                 )
                 self.angle = math.degrees(math.atan2(-dy, dx))
                 projectiles.add(
-                    Projectile(self.rect.centerx, self.rect.centery, closest_target, self.attack_damage, self.team)
+                    Projectile(
+                        position=self.rect.center, target=closest_target, damage=self.attack_damage, team=self.team
+                    )
                 )
                 self.cooldown_timer = self.attack_cooldown
-                particles.add(Particle.smoke_cloud(self.rect.centerx, self.rect.centery))
+                particles.add(Particle.smoke_cloud(self.rect))
             else:
                 self.target_unit = None
+
         self.image = pygame.Surface(self.SIZE, pygame.SRCALPHA)
         base = pygame.Surface((40, 40), pygame.SRCALPHA)
         base.fill((180, 180, 0) if self.team == "GDI" else (180, 0, 0))
@@ -588,11 +603,11 @@ class Turret(Building):
 
 
 class Projectile(pygame.sprite.Sprite):
-    def __init__(self, x, y, target, damage, team) -> None:
+    def __init__(self, *, position: IntCoord, target, damage, team) -> None:
         super().__init__()
         self.image = pygame.Surface((10, 5), pygame.SRCALPHA)
         pygame.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))  # Brighter projectile
-        self.rect = self.image.get_rect(center=(x, y))
+        self.rect = self.image.get_rect(center=position)
         self.target = target
         self.speed = 6
         self.damage = damage
@@ -611,14 +626,17 @@ class Projectile(pygame.sprite.Sprite):
                 self.rect.x += self.speed * math.cos(angle)
                 self.rect.y += self.speed * math.sin(angle)
                 if self.particle_timer <= 0:
-                    particles.add(Particle.projectile_trail(x=self.rect.centerx, y=self.rect.centery, angle=angle))
+                    particles.add(Particle.projectile_trail(position=self.rect.center, angle=angle))
                     self.particle_timer = 2
+
                 else:
                     self.particle_timer -= 1
+
             else:
                 self.kill()
                 for _ in range(5):
-                    particles.add(Particle.projectile_explosion(self.rect.centerx, self.rect.centery))
+                    particles.add(Particle.projectile_explosion(self.rect.center))
+
         else:
             self.kill()
 
@@ -723,6 +741,7 @@ class ProductionInterface:
                 surface, (0, 200, 200) if tab_name == self.current_tab else (50, 50, 50), rect, border_radius=5
             )
             surface.blit(font.render(text=tab_name, antialias=True, color=(255, 255, 255)), (rect.x + 10, rect.y + 10))
+
         for rect, unit_class, cost_fn, req_fn in self.buttons[self.current_tab]:
             cost = cost_fn(self.headquarters.team) if unit_class else 0
             can_produce = iron >= cost and req_fn()
@@ -751,15 +770,16 @@ class ProductionInterface:
             )
             pygame.draw.rect(surface, (0, 255, 0), (SCREEN_WIDTH - 180, 340, int(160 * progress), 10))
             pygame.draw.rect(surface, (255, 255, 255), (SCREEN_WIDTH - 180, 340, 160, 10), 1)
+
         if self.headquarters.pending_building:
             mouse_pos = pygame.mouse.get_pos()
-            world_pos = snap_to_grid(*camera.screen_to_world(mouse_pos))
+            world_pos = snap_to_grid(camera.screen_to_world(mouse_pos))
             building_size = self.headquarters.pending_building.SIZE
             temp_surface = pygame.Surface(building_size, pygame.SRCALPHA)
             temp_surface.fill(GDI_COLOR if self.headquarters.team == "GDI" else NOD_COLOR)
             temp_surface.set_alpha(100)
             valid = is_valid_building_position(
-                world_pos[0], world_pos[1], team=self.headquarters.team, cls=self.headquarters.pending_building
+                position=world_pos, team=self.headquarters.team, cls=self.headquarters.pending_building
             )
             pygame.draw.rect(
                 temp_surface,
@@ -778,8 +798,10 @@ class ProductionInterface:
             if rect.collidepoint(pos):
                 self.current_tab = tab_name
                 return True
+
         if len(self.headquarters.production_queue) >= 5:
             return False
+
         for rect, unit_class, cost_fn, req_fn in self.buttons[self.current_tab]:
             if rect.collidepoint(pos):
                 if unit_class is None and selected_building and selected_building.team == self.headquarters.team:
@@ -787,13 +809,16 @@ class ProductionInterface:
                     selected_building.kill()
                     selected_building = None
                     return True
+
                 cost = cost_fn(self.headquarters.team)
                 if unit_class and iron >= cost and req_fn():
                     self.headquarters.production_queue.append(unit_class)
                     self.headquarters.iron -= cost
                     if not self.headquarters.production_timer:
                         self.production_timer = self.headquarters.get_production_time(unit_class)
+
                     return True
+
         return False
 
 
@@ -807,10 +832,10 @@ class AI:
         self,
         *,
         headquarters: Headquarters,
-        ai_units: Iterable[GameObject],
-        all_units: Iterable[GameObject],
-        iron_fields: Iterable[IronField],
-        buildings: Iterable[Building],
+        ai_units: pygame.sprite.Group[GameObject],
+        all_units: pygame.sprite.Group[GameObject],
+        iron_fields: pygame.sprite.Group[IronField],
+        buildings: pygame.sprite.Group[Building],
     ) -> None:
         self.headquarters = headquarters
         self.ai_units = ai_units
@@ -830,16 +855,16 @@ class AI:
         self.surprise_attack_cooldown = 0
 
     @property
-    def ai_buildings(self) -> set[Building]:
-        return {b for b in self.buildings if b.team == "NOD"}
+    def ai_buildings(self) -> pygame.sprite.Group[Building]:
+        return pygame.sprite.Group(b for b in self.buildings if b.team == "NOD")
 
     @property
-    def player_units(self) -> set[GameObject]:
-        return {u for u in self.all_units if u.team == "GDI"}
+    def player_units(self) -> pygame.sprite.Group[GameObject]:
+        return pygame.sprite.Group(u for u in self.all_units if u.team == "GDI")
 
     @property
-    def player_buildings(self) -> set[Building]:
-        return {b for b in self.buildings if b.team == "GDI"}
+    def player_buildings(self) -> pygame.sprite.Group[Building]:
+        return pygame.sprite.Group(b for b in self.buildings if b.team == "GDI")
 
     def _evaluate_player(self) -> dict[str, int]:
         return {
@@ -888,6 +913,7 @@ class AI:
                 gdi_hq = next((b for b in self.player_buildings if isinstance(b, Headquarters)), None)
                 if gdi_hq:
                     self.scout_targets.append(gdi_hq.rect.center)
+
             for scout in [u for u in self.ai_units if isinstance(u, Infantry) and not u.target][:3]:
                 if self.scout_targets:
                     scout.target = self.scout_targets.pop(0)
@@ -918,6 +944,7 @@ class AI:
                     else 1
                 )
                 targets.append((target, dist, priority))
+
         for building in self.buildings:
             if building.team != unit.team and building.health > 0:
                 dist = math.sqrt(
@@ -925,6 +952,7 @@ class AI:
                 )
                 priority = 2.5 if isinstance(building, Headquarters) else 2 if isinstance(building, Turret) else 1
                 targets.append((building, dist, priority))
+
         targets.sort(key=lambda x: x[1] / x[2])
         return targets[0][0] if targets and targets[0][1] < 250 else None
 
@@ -940,10 +968,12 @@ class AI:
         live_ai_buildings = {b for b in self.ai_buildings if building.health > 0}
         for b in live_ai_buildings:
             for angle in range(0, 360, 20):
-                x = b.rect.centerx + math.cos(math.radians(angle)) * 120
-                y = b.rect.centery + math.sin(math.radians(angle)) * 120
-                x, y = snap_to_grid(x, y)
-                if is_valid_building_position(x, y, team="NOD", cls=building_class):
+                position = (
+                    b.rect.centerx + math.cos(math.radians(angle)) * 120,
+                    b.rect.centery + math.sin(math.radians(angle)) * 120,
+                )
+                x, y = snap_to_grid(position)
+                if is_valid_building_position(position=(x, y), team="NOD", cls=building_class):
                     if (
                         closest_field
                         and math.sqrt((x - closest_field.rect.centerx) ** 2 + (y - closest_field.rect.centery) ** 2)
@@ -954,7 +984,7 @@ class AI:
                     if not closest_field:
                         return x, y
 
-        return snap_to_grid(self.headquarters.rect.centerx, self.headquarters.rect.centery)
+        return snap_to_grid(self.headquarters.rect.center)
 
     def produce_units(self, player_info: Mapping[str, int]) -> None:
         current_units = {
@@ -1103,9 +1133,9 @@ class AI:
                 self.headquarters.production_queue[0]
             )
         if self.headquarters.pending_building and not self.headquarters.pending_building_pos:
-            x, y = self.find_valid_building_position(self.headquarters.pending_building)
-            self.headquarters.pending_building_pos = (x, y)
-            self.headquarters.place_building(x, y, cls=self.headquarters.pending_building)
+            position = self.find_valid_building_position(self.headquarters.pending_building)
+            self.headquarters.pending_building_pos = position
+            self.headquarters.place_building(position=position, cls=self.headquarters.pending_building)
 
     def coordinate_attack(self, *, surprise: bool = False) -> None:
         self.wave_timer = 0
@@ -1208,8 +1238,8 @@ if __name__ == "__main__":
     particles: SpriteGroup = pygame.sprite.Group()
     selected_units: SpriteGroup = pygame.sprite.Group()
 
-    gdi_headquarters = Headquarters(300, 300, "GDI")
-    nod_headquarters = Headquarters(2000, 1200, "NOD")
+    gdi_headquarters = Headquarters((300, 300), "GDI")
+    nod_headquarters = Headquarters((2000, 1200), "NOD")
     nod_headquarters.iron = 1500
     interface = ProductionInterface(gdi_headquarters)
     console = GameConsole()
@@ -1241,22 +1271,21 @@ if __name__ == "__main__":
         buildings=global_buildings,
     )
 
-    player_units.add(Infantry(350, 300, "GDI"))
-    player_units.add(Infantry(370, 300, "GDI"))
-    player_units.add(Infantry(390, 300, "GDI"))
-    player_units.add(Harvester(400, 400, "GDI", gdi_headquarters))
+    player_units.add(Infantry((350, 300), "GDI"))
+    player_units.add(Infantry((370, 300), "GDI"))
+    player_units.add(Infantry((390, 300), "GDI"))
+    player_units.add(Harvester((400, 400), "GDI", gdi_headquarters))
 
-    ai_units.add(Infantry(2050, 1200, "NOD"))
-    ai_units.add(Infantry(2070, 1200, "NOD"))
-    ai_units.add(Infantry(2090, 1200, "NOD"))
-    ai_units.add(Harvester(2200, 1300, "NOD", nod_headquarters))
+    ai_units.add(Infantry((2050, 1200), "NOD"))
+    ai_units.add(Infantry((2070, 1200), "NOD"))
+    ai_units.add(Infantry((2090, 1200), "NOD"))
+    ai_units.add(Harvester((2200, 1300), "NOD", nod_headquarters))
 
     global_units.add(player_units, ai_units)
     global_buildings.add(gdi_headquarters, nod_headquarters)
     for _ in range(40):
-        iron_fields.add(
-            IronField(random.randint(100, MAP_WIDTH - 100), random.randint(100, MAP_HEIGHT - 100), font=font)
-        )
+        pos = random.randint(100, MAP_WIDTH - 100), random.randint(100, MAP_HEIGHT - 100)
+        iron_fields.add(IronField(position=pos, font=font))
 
     running = True
     while running:
@@ -1268,11 +1297,13 @@ if __name__ == "__main__":
                 world_x, world_y = camera.screen_to_world((target_x, target_y))
                 if event.button == 1:
                     if gdi_headquarters.pending_building:
-                        world_x, world_y = snap_to_grid(world_x, world_y)
+                        world_x, world_y = snap_to_grid((world_x, world_y))
                         if is_valid_building_position(
-                            world_x, world_y, team="GDI", cls=gdi_headquarters.pending_building
+                            position=(world_x, world_y), team="GDI", cls=gdi_headquarters.pending_building
                         ):
-                            gdi_headquarters.place_building(world_x, world_y, cls=gdi_headquarters.pending_building)
+                            gdi_headquarters.place_building(
+                                position=(world_x, world_y), cls=gdi_headquarters.pending_building
+                            )
                         continue
                     if interface.handle_click(event.pos, gdi_headquarters.iron):
                         continue
@@ -1340,6 +1371,7 @@ if __name__ == "__main__":
                             elif clicked_field:
                                 unit.target = clicked_field.rect.center
                                 unit.formation_target = None
+
             elif event.type == pygame.MOUSEMOTION and selecting:
                 current_pos = event.pos
                 if not select_start:
@@ -1387,32 +1419,39 @@ if __name__ == "__main__":
         fog_of_war.update_visibility(player_units, global_buildings, "GDI")
         screen.blit(base_map, (-camera.rect.x, -camera.rect.y))
         for field in iron_fields:
-            if field.resources > 0 and fog_of_war.is_tile_explored(field.rect.centerx, field.rect.centery):
+            if field.resources > 0 and fog_of_war.is_tile_explored(field.rect.center):
                 field.draw(screen, camera)
+
         for building in global_buildings:
             if building.health > 0 and (
-                fog_of_war.is_tile_visible(building.rect.centerx, building.rect.centery)
-                or (building.is_seen and fog_of_war.is_tile_explored(building.rect.centerx, building.rect.centery))
+                fog_of_war.is_tile_visible(building.rect.center)
+                or (building.is_seen and fog_of_war.is_tile_explored(building.rect.center))
             ):
                 building.draw(screen, camera)
+
         fog_of_war.draw(screen, camera)
         for unit in global_units:
-            if unit.team == "GDI" or fog_of_war.is_tile_visible(unit.rect.centerx, unit.rect.centery):
+            if unit.team == "GDI" or fog_of_war.is_tile_visible(unit.rect.center):
                 unit.draw(screen, camera)
+
         for projectile in projectiles:
-            if projectile.team == "GDI" or fog_of_war.is_tile_visible(projectile.rect.centerx, projectile.rect.centery):
+            if projectile.team == "GDI" or fog_of_war.is_tile_visible(projectile.rect.center):
                 projectile.draw(screen, camera)
+
         for particle in particles:
-            if fog_of_war.is_tile_visible(particle.rect.centerx, particle.rect.centery):
+            if fog_of_war.is_tile_visible(particle.rect.center):
                 particle.draw(screen, camera)
+
         interface.draw(screen, gdi_headquarters.iron)
         screen.blit(font.render(text=f"Iron: {gdi_headquarters.iron}", antialias=True, color=(255, 255, 255)), (10, 10))
         if selecting and select_rect:
             pygame.draw.rect(screen, (255, 255, 255), select_rect, 2)
+
         console.draw(screen)
         for obj in global_units:
             if hasattr(obj, "under_attack") and obj.under_attack:
                 obj.under_attack = False
+
         pygame.display.flip()
         clock.tick(60)
 

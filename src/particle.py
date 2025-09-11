@@ -8,25 +8,25 @@ import pygame
 
 if TYPE_CHECKING:
     from src.camera import Camera
+    from src.geometry import FloatCoord
 
 
 class Particle(pygame.sprite.Sprite):
-    def __init__(self, *, x: float, y: float, vx: float, vy: float, size: int, color, lifetime: int) -> None:
+    def __init__(self, *, position: FloatCoord, vx: float, vy: float, size: int, color, lifetime: int) -> None:
         super().__init__()
         self.image: pygame.Surface = pygame.Surface((size, size), pygame.SRCALPHA)
         pygame.draw.circle(self.image, color, (size // 2, size // 2), size // 2)
-        self.rect: pygame.Rect = self.image.get_rect(center=(x, y))
+        self.rect: pygame.Rect = self.image.get_rect(center=position)
         self.vx, self.vy = vx, vy
         self.initial_lifetime = lifetime
         self.lifetime = self.initial_lifetime
         self.alpha = 255
 
     @classmethod
-    def projectile_trail(cls, x: float, y: float, angle: float) -> Self:
+    def projectile_trail(cls, position: FloatCoord, angle: float) -> Self:
         """Return a single particle."""
         return cls(
-            x=x,
-            y=y,
+            position=position,
             vx=-math.cos(angle) * random.uniform(0.5, 1.5),
             vy=-math.sin(angle) * random.uniform(0.5, 1.5),
             size=5,
@@ -35,12 +35,11 @@ class Particle(pygame.sprite.Sprite):
         )
 
     @classmethod
-    def smoke_cloud(cls, x: float, y: float) -> set[Self]:
+    def smoke_cloud(cls, position: FloatCoord) -> pygame.sprite.Group[Self]:
         """Return a cloud of particles."""
-        return {
+        return pygame.sprite.Group(
             cls(
-                x=x,
-                y=y,
+                position=position,
                 vx=random.uniform(-1.5, 1.5),
                 vy=random.uniform(-1.5, 1.5),
                 size=random.randint(6, 10),
@@ -48,15 +47,14 @@ class Particle(pygame.sprite.Sprite):
                 lifetime=20,
             )
             for _ in range(5)
-        }
+        )
 
     @classmethod
-    def damage_cloud_small(cls, x: float, y: float) -> set[Self]:
+    def damage_cloud_small(cls, position: FloatCoord) -> pygame.sprite.Group[Self]:
         """Return a small cloud of particles."""
-        return {
+        return pygame.sprite.Group(
             cls(
-                x=x,
-                y=y,
+                position=position,
                 vx=random.uniform(-1, 1),
                 vy=random.uniform(-1, 1),
                 size=4,
@@ -64,15 +62,14 @@ class Particle(pygame.sprite.Sprite):
                 lifetime=10,
             )
             for _ in range(3)
-        }
+        )
 
     @classmethod
-    def damage_cloud_large(cls, x: float, y: float) -> set[Self]:
+    def damage_cloud_large(cls, position: FloatCoord) -> pygame.sprite.Group[Self]:
         """Return a cloud of particles."""
-        return {
+        return pygame.sprite.Group(
             cls(
-                x=x,
-                y=y,
+                position=position,
                 vx=random.uniform(-2, 2),
                 vy=random.uniform(-2, 2),
                 size=6,
@@ -80,15 +77,14 @@ class Particle(pygame.sprite.Sprite):
                 lifetime=15,
             )
             for _ in range(5)
-        }
+        )
 
     @classmethod
-    def building_explosion(cls, x: float, y: float) -> set[Self]:
+    def building_explosion(cls, position: FloatCoord) -> pygame.sprite.Group[Self]:
         """Return a cloud of particles."""
-        return {
+        return pygame.sprite.Group(
             cls(
-                x=x,
-                y=y,
+                position=position,
                 vx=random.uniform(-3, 3),
                 vy=random.uniform(-3, 3),
                 size=random.randint(6, 12),
@@ -96,15 +92,14 @@ class Particle(pygame.sprite.Sprite):
                 lifetime=30,
             )
             for _ in range(15)
-        }
+        )
 
     @classmethod
-    def projectile_explosion(cls, x: float, y: float) -> set[Self]:
+    def projectile_explosion(cls, position: FloatCoord) -> pygame.sprite.Group[Self]:
         """Return a cloud of particles."""
-        return {
+        return pygame.sprite.Group(
             cls(
-                x=x,
-                y=y,
+                position=position,
                 vx=random.uniform(-2, 2),
                 vy=random.uniform(-2, 2),
                 size=6,
@@ -112,7 +107,7 @@ class Particle(pygame.sprite.Sprite):
                 lifetime=15,
             )
             for _ in range(5)
-        }
+        )
 
     def update(self) -> None:
         self.rect.x += self.vx
