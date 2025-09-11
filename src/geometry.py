@@ -23,7 +23,10 @@ def snap_to_grid(x: float, y: float) -> IntCoord:
 
 
 def calculate_formation_positions(
-    center: IntCoord, target: IntCoord | None, num_units: int, direction=None
+    center: IntCoord,
+    target: IntCoord | None,
+    num_units: int,
+    direction=None,
 ) -> list[FloatCoord]:
     if num_units == 0:
         return []

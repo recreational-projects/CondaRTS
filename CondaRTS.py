@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Iterable, Mapping, TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import pygame
 
@@ -14,6 +14,9 @@ from src.game_object import GameObject
 from src.geometry import FloatCoord, IntCoord, calculate_formation_positions, snap_to_grid
 from src.iron_field import IronField
 from src.particle import Particle
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
 
 BUILDING_RANGE = 160
 BASE_PRODUCTION_TIME = 180
@@ -28,19 +31,16 @@ SpriteGroup: TypeAlias = pygame.sprite.Group[Any]
 
 def _is_in_building_range(*, x, y, team) -> bool:
     live_friendly_buildings = {b for b in global_buildings if b.team == team and b.health > 0}
-    for b in live_friendly_buildings:
-        if math.sqrt((x - b.rect.centerx) ** 2 + (y - b.rect.centery) ** 2) <= BUILDING_RANGE:
-            return True
-    return False
+    return any(
+        math.sqrt((x - b.rect.centerx) ** 2 + (y - b.rect.centery) ** 2) <= BUILDING_RANGE
+        for b in live_friendly_buildings
+    )
 
 
 def _collides_with_building(*, x, y, cls: type[Building]) -> bool:
     live_buildings = {b for b in global_buildings if b.health > 0}
     new_rect = pygame.Rect((x, y), cls.SIZE)
-    for b in live_buildings:
-        if new_rect.colliderect(b.rect):
-            return True
-    return False
+    return any(new_rect.colliderect(b.rect) for b in live_buildings)
 
 
 def is_valid_building_position(x, y, *, team, cls: type[Building]) -> bool:
@@ -145,11 +145,9 @@ def handle_projectiles(projectiles, all_units, buildings) -> None:
                         target.kill()
                     hit = True
                     break
-        if hit:
-            projectile.kill()
-        # Only kill projectile if it has no valid target or moves too far
-        elif not (projectile.target and hasattr(projectile.target, "health") and projectile.target.health > 0):
-            projectile.kill()
+
+        if hit or not (projectile.target and hasattr(projectile.target, "health") and projectile.target.health > 0):
+            projectile.kill()  # Only kill projectile if it has no valid target or moves too far
 
 
 class Tank(GameObject):
@@ -282,7 +280,7 @@ class Harvester(GameObject):
         super().update()
         if self.cooldown_timer == 0:
             closest_target, min_dist = None, float("inf")
-            _units = {u for u in global_units}
+            _units = set(global_units)
             live_enemy_infantry = {
                 u for u in _units if all((u.team != self.team, u.health > 0, isinstance(u, Infantry)))
             }
@@ -352,7 +350,7 @@ class Harvester(GameObject):
         self.draw_health_bar(surface, camera)
         if self.iron > 0:
             surface.blit(
-                font.render(f"Iron: {self.iron}", True, (255, 255, 255)),
+                font.render(text=f"Iron: {self.iron}", antialias=True, color=(255, 255, 255)),
                 (camera.apply(self.rect).x, camera.apply(self.rect).y - 35),
             )
 
@@ -411,23 +409,25 @@ class Headquarters(Building):
         self.power_output = 0
 
     def get_production_time(self, unit_class) -> float:
-        _buildings = {b for b in global_buildings}
+        _buildings = set(global_buildings)
         live_friendly_buildings = {b for b in _buildings if b.team == self.team and b.health > 0}
         base_time = BASE_PRODUCTION_TIME
         if unit_class == Infantry:
             barracks_count = len({b for b in live_friendly_buildings if isinstance(b, Barracks)})
             return base_time * (0.9**barracks_count)
-        elif unit_class in [Tank, Harvester]:
-            warfactory_count = len({b for b in live_friendly_buildings if isinstance(b, WarFactory)})
-            return base_time * (0.9**warfactory_count)
+
+        if unit_class in [Tank, Harvester]:
+            war_factory_count = len({b for b in live_friendly_buildings if isinstance(b, WarFactory)})
+            return base_time * (0.9**war_factory_count)
+
         return base_time
 
     def update(self) -> None:
-        _buildings = {b for b in global_buildings}
+        _buildings = set(global_buildings)
         friendly_buildings = {b for b in _buildings if b.team == self.team}
         live_friendly_buildings = {b for b in friendly_buildings if b.health > 0}
 
-        _units = {u for u in global_units}
+        _units = set(global_units)
         friendly_units = {u for u in _units if u.team == self.team}
 
         self.power_usage = sum(u.power_usage for u in friendly_units) + sum(b.power_usage for b in friendly_buildings)
@@ -466,11 +466,11 @@ class Headquarters(Building):
                             ),
                         )
                     elif unit_class in [Tank, Harvester]:
-                        warfactories = {b for b in live_friendly_buildings if isinstance(b, WarFactory)}
-                        if not warfactories:
+                        war_factories = {b for b in live_friendly_buildings if isinstance(b, WarFactory)}
+                        if not war_factories:
                             return
                         spawn_building = min(
-                            warfactories,
+                            war_factories,
                             key=lambda b: math.sqrt(
                                 (b.rect.centerx - self.rect.centerx) ** 2 + (b.rect.centery - self.rect.centery) ** 2
                             ),
@@ -551,7 +551,7 @@ class Turret(Building):
         self.angle: float = 0
 
     def update(self) -> None:
-        _units = {u for u in global_units}
+        _units = set(global_units)
         live_enemy_units = {u for u in _units if u.team != self.team and u.health > 0}
         super().update()
         if self.cooldown_timer > 0:
@@ -635,7 +635,7 @@ class ProductionInterface:
             (pygame.Rect(SCREEN_WIDTH - 180, 10 + i * 40, 160, 30), tab)
             for i, tab in enumerate(["Units", "Buildings", "Defensive"])
         ]
-        buildings = {b for b in global_buildings}
+        buildings = set(global_buildings)
         self.buttons = {
             "Units": [
                 (
@@ -705,15 +705,16 @@ class ProductionInterface:
             Turret: "Turret",
             None: "Sell",
         }
+        self.production_timer: float = 0
 
     def draw(self, surface: pygame.Surface, iron: int) -> None:
         pygame.draw.rect(surface, (60, 60, 60), self.panel_rect)  # Darker panel
         pygame.draw.rect(surface, (100, 100, 100), self.panel_rect, 2)  # Border
         surface.blit(
             font.render(
-                f"Power: {self.headquarters.power_output}/{self.headquarters.power_usage}",
-                True,
-                (0, 255, 0) if self.headquarters.has_enough_power else (255, 0, 0),
+                text=f"Power: {self.headquarters.power_output}/{self.headquarters.power_usage}",
+                antialias=True,
+                color=(0, 255, 0) if self.headquarters.has_enough_power else (255, 0, 0),
             ),
             (SCREEN_WIDTH - 180, 10),
         )
@@ -721,7 +722,7 @@ class ProductionInterface:
             pygame.draw.rect(
                 surface, (0, 200, 200) if tab_name == self.current_tab else (50, 50, 50), rect, border_radius=5
             )
-            surface.blit(font.render(tab_name, True, (255, 255, 255)), (rect.x + 10, rect.y + 10))
+            surface.blit(font.render(text=tab_name, antialias=True, color=(255, 255, 255)), (rect.x + 10, rect.y + 10))
         for rect, unit_class, cost_fn, req_fn in self.buttons[self.current_tab]:
             cost = cost_fn(self.headquarters.team) if unit_class else 0
             can_produce = iron >= cost and req_fn()
@@ -732,12 +733,16 @@ class ProductionInterface:
             )
             pygame.draw.rect(surface, color, rect, border_radius=5)
             surface.blit(
-                font.render(f"{self.button_labels[unit_class]} ({cost if unit_class else ''})", True, (255, 255, 255)),
+                font.render(
+                    text=f"{self.button_labels[unit_class]} ({cost if unit_class else ''})",
+                    antialias=True,
+                    color=(255, 255, 255),
+                ),
                 (rect.x + 10, rect.y + 10),
             )
         for i, unit_class in enumerate(self.headquarters.production_queue[:5]):
             surface.blit(
-                font.render(f"{unit_class.__name__} ({unit_class.cost})", True, (255, 255, 255)),
+                font.render(text=f"{unit_class.__name__} ({unit_class.cost})", antialias=True, color=(255, 255, 255)),
                 (SCREEN_WIDTH - 180, 350 + i * 25),
             )
         if self.headquarters.production_timer > 0:
@@ -854,9 +859,11 @@ class AI:
         )
         if self.headquarters.iron < 300 or self.iron_income_rate < 50:
             return "BROKE"
-        elif self.headquarters.health < self.headquarters.max_health * 0.6 or self.defense_cooldown > 0:
+
+        if self.headquarters.health < self.headquarters.max_health * 0.6 or self.defense_cooldown > 0:
             return "ATTACKED"
-        elif any(
+
+        if any(
             u.team == "GDI"
             and math.sqrt(
                 (u.rect.centerx - self.headquarters.rect.centerx) ** 2
@@ -866,7 +873,8 @@ class AI:
             for u in self.all_units
         ):
             return "THREATENED"
-        elif self.wave_number >= 2 or player_base_size > 8:
+
+        if self.wave_number >= 2 or player_base_size > 8:
             return "AGGRESSIVE"
 
         return "BUILD UP"
@@ -942,7 +950,8 @@ class AI:
                         < 600
                     ):
                         return x, y
-                    elif not closest_field:
+
+                    if not closest_field:
                         return x, y
 
         return snap_to_grid(self.headquarters.rect.centerx, self.headquarters.rect.centery)
@@ -964,11 +973,11 @@ class AI:
         target_units["Barracks"] = 1
         target_units["WarFactory"] = 1
         has_barracks = current_units["Barracks"] > 0
-        has_warfactory = current_units["WarFactory"] > 0
+        has_war_factory = current_units["WarFactory"] > 0
         total_military = current_units["Infantry"] + current_units["Tank"] + current_units["Turret"]
         iron = self.headquarters.iron
         console.log(
-            f"AI production check: Iron = {iron}, Has Barracks = {has_barracks}, Has WarFactory = {has_warfactory}"
+            f"AI production check: Iron = {iron}, Has Barracks = {has_barracks}, Has WarFactory = {has_war_factory}"
         )
 
         if not has_barracks and iron >= Barracks.cost:
@@ -977,13 +986,15 @@ class AI:
             self.headquarters.iron = iron
             console.log(f"AI produced Barracks, cost: {Barracks.cost}, new iron: {self.headquarters.iron}")
             return
-        elif not has_warfactory and iron >= WarFactory.cost:
+
+        if not has_war_factory and iron >= WarFactory.cost:
             self.headquarters.production_queue.append(WarFactory)
             iron -= WarFactory.cost
             self.headquarters.iron = iron
             console.log(f"AI produced WarFactory, cost: {WarFactory.cost}, new iron: {self.headquarters.iron}")
             return
-        elif (
+
+        if (
             self.headquarters.power_usage > self.headquarters.power_output
             and iron >= PowerPlant.cost
             and current_units["PowerPlant"] < target_units["PowerPlant"]
@@ -1000,7 +1011,7 @@ class AI:
                 or self.iron_income_rate < 50
             )
             and iron >= Harvester.cost
-            and has_warfactory
+            and has_war_factory
         ):
             self.headquarters.production_queue.append(Harvester)
             iron -= Harvester.cost
@@ -1023,7 +1034,7 @@ class AI:
                 production_options.append((Infantry, Infantry.cost))
             if (
                 total_military < 6
-                and has_warfactory
+                and has_war_factory
                 and iron >= Tank.cost
                 and current_units["Tank"] < target_units["Tank"]
             ):
@@ -1032,9 +1043,9 @@ class AI:
                 production_options.append((Turret, Turret.cost))
             if has_barracks and iron >= Infantry.cost and current_units["Infantry"] < target_units["Infantry"]:
                 production_options.append((Infantry, Infantry.cost))
-            if has_warfactory and iron >= Tank.cost and current_units["Tank"] < target_units["Tank"]:
+            if has_war_factory and iron >= Tank.cost and current_units["Tank"] < target_units["Tank"]:
                 production_options.append((Tank, Tank.cost))
-            if current_units["Harvester"] < target_units["Harvester"] and iron >= Harvester.cost and has_warfactory:
+            if current_units["Harvester"] < target_units["Harvester"] and iron >= Harvester.cost and has_war_factory:
                 production_options.append((Harvester, Harvester.cost))
             if current_units["PowerPlant"] < target_units["PowerPlant"] and iron >= PowerPlant.cost:
                 production_options.append((PowerPlant, PowerPlant.cost))
@@ -1056,14 +1067,14 @@ class AI:
             production_options = []
             if iron >= Turret.cost and current_units["Turret"] < target_units["Turret"]:
                 production_options.append((Turret, Turret.cost))
-            if has_warfactory and iron >= Tank.cost and current_units["Tank"] < target_units["Tank"]:
+            if has_war_factory and iron >= Tank.cost and current_units["Tank"] < target_units["Tank"]:
                 production_options.append((Tank, Tank.cost))
             if has_barracks and iron >= Infantry.cost and current_units["Infantry"] < target_units["Infantry"]:
                 production_options.append((Infantry, Infantry.cost))
             if (
                 current_units["Harvester"] < min(target_units["Harvester"], player_info["harvesters"] + 1)
                 and iron >= Harvester.cost
-                and has_warfactory
+                and has_war_factory
             ):
                 production_options.append((Harvester, Harvester.cost))
             if current_units["PowerPlant"] < target_units["PowerPlant"] and iron >= PowerPlant.cost:
@@ -1078,7 +1089,7 @@ class AI:
 
         elif (
             self.state == "BROKE"
-            and has_warfactory
+            and has_war_factory
             and iron >= Harvester.cost
             and current_units["Harvester"] < min(target_units["Harvester"], player_info["harvesters"] + 1)
         ):
@@ -1096,7 +1107,7 @@ class AI:
             self.headquarters.pending_building_pos = (x, y)
             self.headquarters.place_building(x, y, cls=self.headquarters.pending_building)
 
-    def coordinate_attack(self, surprise: bool = False) -> None:
+    def coordinate_attack(self, *, surprise: bool = False) -> None:
         self.wave_timer = 0
         self.wave_number += 1
         if surprise:
@@ -1395,7 +1406,7 @@ if __name__ == "__main__":
             if fog_of_war.is_tile_visible(particle.rect.centerx, particle.rect.centery):
                 particle.draw(screen, camera)
         interface.draw(screen, gdi_headquarters.iron)
-        screen.blit(font.render(f"Iron: {gdi_headquarters.iron}", True, (255, 255, 255)), (10, 10))
+        screen.blit(font.render(text=f"Iron: {gdi_headquarters.iron}", antialias=True, color=(255, 255, 255)), (10, 10))
         if selecting and select_rect:
             pygame.draw.rect(screen, (255, 255, 255), select_rect, 2)
         console.draw(screen)

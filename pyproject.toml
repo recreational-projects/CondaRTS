@@ -19,8 +19,12 @@ line-length = 120
 [tool.ruff.lint]
 select = [
     "ANN",  # flake8-annotations
+    "FBT",  # flake8-boolean-trap
     "I",  # isort
+    "RET",  # flake8-return
+    "SIM",  # flake8-simplify
     "TC",  # flake8-type-checking
+    "UP",  # pyupgrade
 ]
 ignore =[
     "ANN001",  # Missing type annotation for function argument

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 import pygame
 
 from src.constants import CONSOLE_HEIGHT, SCREEN_HEIGHT, SCREEN_WIDTH
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.game_object import GameObject
     from src.geometry import IntCoord
 

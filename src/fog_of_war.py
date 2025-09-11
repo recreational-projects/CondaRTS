@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING
 
 import pygame
 
@@ -9,6 +9,8 @@ from src.constants import TILE_SIZE
 from src.geometry import FloatCoord, grid_index
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from CondaRTS import Building
     from src.camera import Camera
     from src.game_object import GameObject
@@ -34,7 +36,7 @@ class FogOfWar:
                 if (
                     math.sqrt(
                         (cx - (x * self.tile_size + self.tile_size // 2)) ** 2
-                        + (cy - (y * self.tile_size + self.tile_size // 2)) ** 2
+                        + (cy - (y * self.tile_size + self.tile_size // 2)) ** 2,
                     )
                     <= radius
                 ):
@@ -64,7 +66,7 @@ class FogOfWar:
             return self.visible[tile_x][tile_y]
         return False
 
-    def is_tile_explored(self, x: int, y: int) -> bool:
+    def is_tile_explored(self, x: float, y: float) -> bool:
         tile_x, tile_y = grid_index(x, y)
         if 0 <= tile_x < len(self.explored) and 0 <= tile_y < len(self.explored[0]):
             return self.explored[tile_x][tile_y]

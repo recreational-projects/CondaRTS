@@ -27,7 +27,7 @@ class GameConsole:
         for i, line in enumerate(visible_lines):
             if i >= self.max_lines:
                 break
-            text_surface = self.font.render(line, True, (200, 200, 200))
+            text_surface = self.font.render(text=line, antialias=True, color=(200, 200, 200))
             surface.blit(text_surface, (self.rect.x + 5, self.rect.y + 5 + i * 18))
         scroll_height = self.rect.height - 20
         scroll_pos = (
@@ -45,23 +45,25 @@ class GameConsole:
                 scroll_amount = event.y * self.scroll_speed
                 self.scroll_offset = max(0, min(max_scroll, self.scroll_offset - scroll_amount))
                 print(f"Console scroll detected: y={event.y}, scroll_offset={self.scroll_offset}")
+
         elif event.type == pygame.KEYDOWN:
             if self.rect.collidepoint(mouse_pos):
                 max_scroll = max(0, len(self.lines) - self.max_lines)
                 if event.key == pygame.K_UP:
                     self.scroll_offset = max(0, self.scroll_offset - 1)
                     print(f"Console scroll up: scroll_offset={self.scroll_offset}")
+
                 elif event.key == pygame.K_DOWN:
                     self.scroll_offset = min(max_scroll, self.scroll_offset + 1)
                     print(f"Console scroll down: scroll_offset={self.scroll_offset}")
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.rect.collidepoint(event.pos):
-                start_y = self.rect.y + 5
-                line_idx = (event.pos[1] - start_y) // 18 + self.scroll_offset
-                if 0 <= line_idx < len(self.lines):
-                    self.selected_text = self.lines[line_idx]
-                    try:
-                        pygame.scrap.put_text(pygame.SCRAP_TEXT)
-                        print(f"Copied to clipboard: {self.selected_text}")
-                    except Exception as e:
-                        print(f"Failed to copy to clipboard: {e}")
+
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.rect.collidepoint(event.pos):
+            start_y = self.rect.y + 5
+            line_idx = (event.pos[1] - start_y) // 18 + self.scroll_offset
+            if 0 <= line_idx < len(self.lines):
+                self.selected_text = self.lines[line_idx]
+                try:
+                    pygame.scrap.put_text(pygame.SCRAP_TEXT)
+                    print(f"Copied to clipboard: {self.selected_text}")
+                except Exception as e:
+                    print(f"Failed to copy to clipboard: {e}")
