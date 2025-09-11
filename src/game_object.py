@@ -73,7 +73,8 @@ class GameObject(pygame.sprite.Sprite):
                 self.rect.y += self.speed * dy / dist
             self.rect.clamp_ip(pygame.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
 
-    def update(self) -> None:
+    def update(self, *args, **kwargs) -> None:
+        super().update(*args, **kwargs)
         self.move_toward()
         if self.cooldown_timer > 0:
             self.cooldown_timer -= 1

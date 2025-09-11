@@ -11,7 +11,7 @@ from src.geometry import FloatCoord, grid_index
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from CondaRTS import Building
+    from src.building import Building
     from src.camera import Camera
     from src.game_object import GameObject
 
