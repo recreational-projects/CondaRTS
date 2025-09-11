@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 import pygame
 
 from src.constants import CONSOLE_HEIGHT, SCREEN_HEIGHT, SCREEN_WIDTH
 
 if TYPE_CHECKING:
+    from src.game_object import GameObject
     from src.geometry import IntCoord
 
 
@@ -16,7 +17,7 @@ class Camera:
         self.map_height = map_height
         self.rect = pygame.Rect(0, 0, SCREEN_WIDTH - 200, SCREEN_HEIGHT - CONSOLE_HEIGHT)
 
-    def update(self, selected_units, mouse_pos: IntCoord, interface_rect: pygame.Rect) -> None:
+    def update(self, selected_units: Sequence[GameObject], mouse_pos: IntCoord, interface_rect: pygame.Rect) -> None:
         mx, my = mouse_pos
         if interface_rect.collidepoint(mx, my) or my > SCREEN_HEIGHT - CONSOLE_HEIGHT:
             return
@@ -40,7 +41,7 @@ class Camera:
 
         self.rect.clamp_ip(pygame.Rect(0, 0, self.map_width, self.map_height))
 
-    def apply(self, rect) -> pygame.Rect:
+    def apply(self, rect: pygame.Rect) -> pygame.Rect:
         return pygame.Rect(rect.x - self.rect.x, rect.y - self.rect.y, rect.width, rect.height)
 
     def screen_to_world(self, screen_pos: IntCoord) -> IntCoord:

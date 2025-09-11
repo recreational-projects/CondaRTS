@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 
 import pygame
 
 from src.constants import TILE_SIZE
-from src.geometry import grid_index
+from src.geometry import FloatCoord, grid_index
 
 if TYPE_CHECKING:
+    from CondaRTS import Building
     from src.camera import Camera
+    from src.game_object import GameObject
 
 
 class FogOfWar:
@@ -20,7 +22,7 @@ class FogOfWar:
         self.surface = pygame.Surface((map_width, map_height), pygame.SRCALPHA)
         self.surface.fill((0, 0, 0, 255))
 
-    def reveal(self, center: tuple[int, int], radius: int) -> None:
+    def reveal(self, center: FloatCoord, radius: int) -> None:
         tile_x, tile_y = grid_index(*center)
         cx, cy = center
         radius_tiles = radius // self.tile_size
@@ -39,7 +41,7 @@ class FogOfWar:
                     self.explored[x][y] = True
                     self.visible[x][y] = True
 
-    def update_visibility(self, units, buildings, team) -> None:
+    def update_visibility(self, units: Iterable[GameObject], buildings: Iterable[Building], team) -> None:
         self.visible = [[False] * len(self.explored[0]) for _ in range(len(self.explored))]
         for unit in units:
             if unit.team == team and hasattr(unit, "rect"):

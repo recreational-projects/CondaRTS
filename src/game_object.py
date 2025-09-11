@@ -9,6 +9,7 @@ from src.constants import MAP_HEIGHT, MAP_WIDTH
 
 if TYPE_CHECKING:
     from src.camera import Camera
+    from src.geometry import FloatCoord
 
 
 class GameObject(pygame.sprite.Sprite):
@@ -16,9 +17,9 @@ class GameObject(pygame.sprite.Sprite):
         super().__init__()
         self.rect: pygame.Rect = pygame.Rect((x, y), (0, 0))  # Nominal, overridden
         self.team = team
-        self.target: tuple[int, int] | None = None
+        self.target: FloatCoord | None = None
         self.formation_target = None
-        self.speed = 0
+        self.speed: float = 0
         self.health = 0
         self.max_health = 0
         self.attack_range = 0
@@ -28,7 +29,7 @@ class GameObject(pygame.sprite.Sprite):
         self.selected = False
         self.power_usage = 0
         self.under_attack = False
-        self.target_unit = None
+        self.target_unit: GameObject | None = None
 
     def move_toward(self) -> None:
         if (

@@ -11,18 +11,20 @@ FloatCoord: TypeAlias = tuple[float, float]
 """Float point."""
 
 
-def grid_index(x: int, y: int) -> IntCoord:
+def grid_index(x: float, y: float) -> IntCoord:
     """Return the grid tile index coordinate containing the position."""
     return x // TILE_SIZE, y // TILE_SIZE
 
 
-def snap_to_grid(x: int, y: int) -> IntCoord:
+def snap_to_grid(x: float, y: float) -> IntCoord:
     """Return the origin point of the grid tile containing the position."""
     index = grid_index(x, y)
     return index[0] * TILE_SIZE, index[1] * TILE_SIZE
 
 
-def calculate_formation_positions(center: IntCoord, target: IntCoord, num_units, direction=None) -> list[FloatCoord]:
+def calculate_formation_positions(
+    center: IntCoord, target: IntCoord | None, num_units: int, direction=None
+) -> list[FloatCoord]:
     if num_units == 0:
         return []
     max_cols, max_rows = 5, 4
