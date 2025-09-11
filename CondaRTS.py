@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, TypeAlias
+from typing import Any, Iterable, Mapping, TypeAlias
 
 import pygame
 
 from src.camera import Camera
 from src.constants import CONSOLE_HEIGHT, MAP_HEIGHT, MAP_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, TILE_SIZE
 from src.fog_of_war import FogOfWar
+from src.game_console import GameConsole
 from src.game_object import GameObject
-from src.geometry import IntCoord, calculate_formation_positions, snap_to_grid
+from src.geometry import FloatCoord, IntCoord, calculate_formation_positions, snap_to_grid
+from src.iron_field import IronField
 from src.particle import Particle
 
 BUILDING_RANGE = 160
@@ -41,7 +43,7 @@ def _collides_with_building(*, x, y, cls: type[Building]) -> bool:
     return False
 
 
-def is_valid_building_position(x, y, *, team, cls: type[Building]):
+def is_valid_building_position(x, y, *, team, cls: type[Building]) -> bool:
     return _is_in_building_range(x=x, y=y, team=team) and not _collides_with_building(x=x, y=y, cls=cls)
 
 
@@ -153,7 +155,7 @@ def handle_projectiles(projectiles, all_units, buildings) -> None:
 class Tank(GameObject):
     cost = 500
 
-    def __init__(self, x, y, team):
+    def __init__(self, x, y, team) -> None:
         super().__init__(x=x, y=y, team=team)
         self.base_image = pygame.Surface((30, 20), pygame.SRCALPHA)
         # Draw tank body (front facing east/right)
@@ -171,7 +173,7 @@ class Tank(GameObject):
         self.attack_range = 200
         self.attack_damage = 20 if team == "GDI" else 15
         self.attack_cooldown = 50
-        self.angle = 0
+        self.angle: float = 0
         self.recoil = 0
         self.power_usage = 15
         self.target_unit = None
@@ -214,7 +216,7 @@ class Tank(GameObject):
 class Infantry(GameObject):
     cost = 100
 
-    def __init__(self, x, y, team):
+    def __init__(self, x, y, team) -> None:
         super().__init__(x=x, y=y, team=team)
         self.image = pygame.Surface((16, 16), pygame.SRCALPHA)
         # Draw infantry as a simple soldier
@@ -252,7 +254,7 @@ class Infantry(GameObject):
 class Harvester(GameObject):
     cost = 800
 
-    def __init__(self, x, y, team, headquarters):
+    def __init__(self, x, y, team, headquarters) -> None:
         super().__init__(x=x, y=y, team=team)
         self.image = pygame.Surface((50, 30), pygame.SRCALPHA)
         # Draw harvester as a truck
@@ -276,7 +278,7 @@ class Harvester(GameObject):
         self.attack_cooldown = 30
         self.target_unit = None
 
-    def update(self):
+    def update(self) -> None:
         super().update()
         if self.cooldown_timer == 0:
             closest_target, min_dist = None, float("inf")
@@ -325,12 +327,18 @@ class Harvester(GameObject):
             if self.harvest_time > 0:
                 self.harvest_time -= 1
             else:
+                if not self.target_field:
+                    raise TypeError("No target field")  # Temporary handling, review later
+
                 harvested = min(self.target_field.resources, self.capacity)
                 self.iron += harvested
                 self.target_field.resources -= harvested
                 self.state = "returning"
                 self.target = self.headquarters.rect.center
         elif self.state == "returning":
+            if not self.target:
+                raise TypeError("No target")  # Temporary handling, review later
+
             if math.sqrt((self.rect.centerx - self.target[0]) ** 2 + (self.rect.centery - self.target[1]) ** 2) < 30:
                 self.headquarters.iron += self.iron
                 self.iron = 0
@@ -391,14 +399,14 @@ class Headquarters(Building):
     SIZE = (80, 80)
     cost = 2000
 
-    def __init__(self, x, y, team):
+    def __init__(self, x, y, team) -> None:
         super().__init__(x, y, team, GDI_COLOR if team == "GDI" else NOD_COLOR, 1200, self.cost)
         self.iron = 1500
-        self.production_queue = []
-        self.production_timer = 0
+        self.production_queue: list[type] = []
+        self.production_timer: float = 0
         self.base_power = 300
-        self.pending_building = None
-        self.pending_building_pos = None
+        self.pending_building: GameObject | None = None
+        self.pending_building_pos = FloatCoord | None
         self.has_enough_power = True
         self.power_output = 0
 
@@ -414,7 +422,7 @@ class Headquarters(Building):
             return base_time * (0.9**warfactory_count)
         return base_time
 
-    def update(self):
+    def update(self) -> None:
         _buildings = {b for b in global_buildings}
         friendly_buildings = {b for b in _buildings if b.team == self.team}
         live_friendly_buildings = {b for b in friendly_buildings if b.health > 0}
@@ -491,7 +499,7 @@ class Headquarters(Building):
                 )
         super().update()
 
-    def place_building(self, x, y, *, cls: type[Building]):
+    def place_building(self, x, y, *, cls: type[Building]) -> None:
         x, y = snap_to_grid(x, y)
         if is_valid_building_position(x, y, team=self.team, cls=cls):
             global_buildings.add(cls(x, y, self.team))
@@ -540,9 +548,9 @@ class Turret(Building):
         self.attack_cooldown = 25
         self.cooldown_timer = 0
         self.target_unit = None
-        self.angle = 0
+        self.angle: float = 0
 
-    def update(self):
+    def update(self) -> None:
         _units = {u for u in global_units}
         live_enemy_units = {u for u in _units if u.team != self.team and u.health > 0}
         super().update()
@@ -591,7 +599,7 @@ class Projectile(pygame.sprite.Sprite):
         self.team = team
         self.particle_timer = 2
 
-    def update(self):
+    def update(self) -> None:
         if self.target and hasattr(self.target, "health") and self.target.health > 0:
             dx, dy = (self.target.rect.centerx - self.rect.centerx, self.target.rect.centery - self.rect.centery)
             dist = math.sqrt(dx**2 + dy**2)
@@ -616,33 +624,6 @@ class Projectile(pygame.sprite.Sprite):
 
     def draw(self, surface: pygame.Surface, camera: Camera) -> None:
         surface.blit(self.image, camera.apply(self.rect).topleft)
-
-
-class IronField(pygame.sprite.Sprite):
-    def __init__(self, x, y, resources=5000) -> None:
-        super().__init__()
-        self.image = pygame.Surface((40, 40), pygame.SRCALPHA)
-        pygame.draw.polygon(
-            self.image, (0, 200, 0), [(0, 20), (20, 0), (40, 20), (20, 40)]
-        )  # Diamond shape for crystal
-        self.rect = self.image.get_rect(topleft=(x, y))
-        self.resources = resources
-        self.regen_timer = 500
-
-    def update(self):
-        if self.regen_timer > 0:
-            self.regen_timer -= 1
-        else:
-            self.resources = min(5000, self.resources + 15)
-            self.regen_timer = 500
-        self.image.set_alpha(int(255 * self.resources / 5000))
-
-    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
-        surface.blit(self.image, camera.apply(self.rect).topleft)
-        surface.blit(
-            font.render(f"{self.resources}", True, (255, 255, 255)),
-            (camera.apply(self.rect).x, camera.apply(self.rect).y - 20),
-        )
 
 
 class ProductionInterface:
@@ -725,7 +706,7 @@ class ProductionInterface:
             None: "Sell",
         }
 
-    def draw(self, surface: pygame.Surface, iron):
+    def draw(self, surface: pygame.Surface, iron: int) -> None:
         pygame.draw.rect(surface, (60, 60, 60), self.panel_rect)  # Darker panel
         pygame.draw.rect(surface, (100, 100, 100), self.panel_rect, 2)  # Border
         surface.blit(
@@ -786,7 +767,7 @@ class ProductionInterface:
                 (mouse_pos[0] - building_size[0] // 2, mouse_pos[1] - building_size[1] // 2),
             )
 
-    def handle_click(self, pos: IntCoord, iron):
+    def handle_click(self, pos: IntCoord, iron: int) -> bool:
         global selected_building
         for rect, tab_name in self.tab_buttons:
             if rect.collidepoint(pos):
@@ -811,74 +792,21 @@ class ProductionInterface:
         return False
 
 
-class GameConsole:
-    def __init__(self):
-        self.rect = pygame.Rect(0, SCREEN_HEIGHT - CONSOLE_HEIGHT, SCREEN_WIDTH, CONSOLE_HEIGHT)
-        self.lines = []
-        self.max_lines = 20
-        self.scroll_offset = 0
-        self.scroll_speed = 20
-        self.selected_text = ""
-
-    def log(self, message):
-        self.lines.append(message)
-        if len(self.lines) > self.max_lines:
-            self.lines.pop(0)
-
-    def draw(self, surface: pygame.Surface) -> None:
-        pygame.draw.rect(surface, (40, 40, 40), self.rect)  # Darker console
-        pygame.draw.rect(surface, (80, 80, 80), self.rect, 2)
-        visible_lines = self.lines[self.scroll_offset :]
-        for i, line in enumerate(visible_lines):
-            if i >= self.max_lines:
-                break
-            text_surface = console_font.render(line, True, (200, 200, 200))
-            surface.blit(text_surface, (self.rect.x + 5, self.rect.y + 5 + i * 18))
-        scroll_height = self.rect.height - 20
-        scroll_pos = (
-            (self.scroll_offset / max(1, len(self.lines) - self.max_lines)) * (scroll_height - 20)
-            if len(self.lines) > self.max_lines
-            else 0
-        )
-        pygame.draw.rect(surface, (150, 150, 150), (self.rect.right - 15, self.rect.y + 5 + scroll_pos, 10, 20))
-
-    def handle_event(self, event) -> None:
-        mouse_pos = pygame.mouse.get_pos()
-        if event.type == pygame.MOUSEWHEEL:
-            if self.rect.collidepoint(mouse_pos):
-                max_scroll = max(0, len(self.lines) - self.max_lines)
-                scroll_amount = event.y * self.scroll_speed
-                self.scroll_offset = max(0, min(max_scroll, self.scroll_offset - scroll_amount))
-                print(f"Console scroll detected: y={event.y}, scroll_offset={self.scroll_offset}")
-        elif event.type == pygame.KEYDOWN:
-            if self.rect.collidepoint(mouse_pos):
-                max_scroll = max(0, len(self.lines) - self.max_lines)
-                if event.key == pygame.K_UP:
-                    self.scroll_offset = max(0, self.scroll_offset - 1)
-                    print(f"Console scroll up: scroll_offset={self.scroll_offset}")
-                elif event.key == pygame.K_DOWN:
-                    self.scroll_offset = min(max_scroll, self.scroll_offset + 1)
-                    print(f"Console scroll down: scroll_offset={self.scroll_offset}")
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.rect.collidepoint(event.pos):
-                start_y = self.rect.y + 5
-                line_idx = (event.pos[1] - start_y) // 18 + self.scroll_offset
-                if 0 <= line_idx < len(self.lines):
-                    self.selected_text = self.lines[line_idx]
-                    try:
-                        pygame.scrap.put_text(pygame.SCRAP_TEXT)
-                        print(f"Copied to clipboard: {self.selected_text}")
-                    except Exception as e:
-                        print(f"Failed to copy to clipboard: {e}")
-
-
 class AI:
     SCOUT_INTERVAL = 200
     ACTION_INTERVAL = 50
     MAX_WAVE_SIZE = 25
     SCALE_FACTOR = 1.8
 
-    def __init__(self, *, headquarters, ai_units, all_units, iron_fields, buildings) -> None:
+    def __init__(
+        self,
+        *,
+        headquarters: Headquarters,
+        ai_units: Iterable[GameObject],
+        all_units: Iterable[GameObject],
+        iron_fields: Iterable[IronField],
+        buildings: Iterable[Building],
+    ) -> None:
         self.headquarters = headquarters
         self.ai_units = ai_units
         self.all_units = all_units
@@ -891,8 +819,8 @@ class AI:
         self.target_ratio = {"Harvester": 4, "Infantry": 6, "Tank": 3, "Turret": 3}
         self.state: str = "BUILD_UP"
         self.defense_cooldown = 0
-        self.scout_targets: list[tuple[int, int]] = []
-        self.iron_income_rate = 0
+        self.scout_targets: list[FloatCoord] = []
+        self.iron_income_rate: float = 0
         self.last_scout_update = 0
         self.surprise_attack_cooldown = 0
 
@@ -901,7 +829,7 @@ class AI:
         return {b for b in self.buildings if b.team == "NOD"}
 
     @property
-    def player_units(self) -> set[Building]:
+    def player_units(self) -> set[GameObject]:
         return {u for u in self.all_units if u.team == "GDI"}
 
     @property
@@ -960,7 +888,10 @@ class AI:
         else:
             self.last_scout_update -= 1
 
-    def prioritize_targets(self, unit):
+    def prioritize_targets(self, unit: GameObject | None) -> GameObject | None:
+        if not unit:
+            raise TypeError("No unit")
+
         targets = []
         for target in self.all_units:
             if target.team != unit.team and target.health > 0:
@@ -989,7 +920,7 @@ class AI:
         targets.sort(key=lambda x: x[1] / x[2])
         return targets[0][0] if targets and targets[0][1] < 250 else None
 
-    def find_valid_building_position(self, building_class) -> IntCoord:
+    def find_valid_building_position(self, building_class: type[Building]) -> FloatCoord:
         closest_field = min(
             self.iron_fields,
             key=lambda f: math.sqrt(
@@ -1016,7 +947,7 @@ class AI:
 
         return snap_to_grid(self.headquarters.rect.centerx, self.headquarters.rect.centery)
 
-    def produce_units(self, player_info):
+    def produce_units(self, player_info: Mapping[str, int]) -> None:
         current_units = {
             "Harvester": len({u for u in self.ai_units if isinstance(u, Harvester)}),
             "Infantry": len({u for u in self.ai_units if isinstance(u, Infantry)}),
@@ -1082,7 +1013,7 @@ class AI:
             return
 
         if self.state in ["BUILD UP", "AGGRESSIVE"]:
-            production_options = []
+            production_options: list[tuple[type[GameObject], int]] = []
             if (
                 total_military < 6
                 and has_barracks
@@ -1165,7 +1096,7 @@ class AI:
             self.headquarters.pending_building_pos = (x, y)
             self.headquarters.place_building(x, y, cls=self.headquarters.pending_building)
 
-    def coordinate_attack(self, surprise=False):
+    def coordinate_attack(self, surprise: bool = False) -> None:
         self.wave_timer = 0
         self.wave_number += 1
         if surprise:
@@ -1256,7 +1187,6 @@ if __name__ == "__main__":
     """The top-level `pygame.Surface`."""
     clock = pygame.time.Clock()
     font = pygame.font.SysFont(None, 24)
-    console_font = pygame.font.SysFont(None, 18)
 
     global_units: SpriteGroup = pygame.sprite.Group()
     global_buildings: SpriteGroup = pygame.sprite.Group()
@@ -1313,7 +1243,9 @@ if __name__ == "__main__":
     global_units.add(player_units, ai_units)
     global_buildings.add(gdi_headquarters, nod_headquarters)
     for _ in range(40):
-        iron_fields.add(IronField(random.randint(100, MAP_WIDTH - 100), random.randint(100, MAP_HEIGHT - 100)))
+        iron_fields.add(
+            IronField(random.randint(100, MAP_WIDTH - 100), random.randint(100, MAP_HEIGHT - 100), font=font)
+        )
 
     running = True
     while running:
@@ -1350,7 +1282,8 @@ if __name__ == "__main__":
                         select_rect = pygame.Rect(target_x, target_y, 0, 0)
                 elif event.button == 3:
                     if gdi_headquarters.pending_building:
-                        gdi_headquarters.pending_building = gdi_headquarters.pending_building_pos = None
+                        gdi_headquarters.pending_building = None
+                        gdi_headquarters.pending_building_pos = None
                         if gdi_headquarters.production_queue and gdi_headquarters.has_enough_power:
                             gdi_headquarters.production_timer = gdi_headquarters.get_production_time(
                                 gdi_headquarters.production_queue[0]
@@ -1398,7 +1331,7 @@ if __name__ == "__main__":
                                 unit.formation_target = None
             elif event.type == pygame.MOUSEMOTION and selecting:
                 current_pos = event.pos
-                if select_start is None:
+                if not select_start:
                     raise TypeError("No selection rect start point")  # Temporary handling, review later
 
                 select_rect = pygame.Rect(
@@ -1408,7 +1341,7 @@ if __name__ == "__main__":
                     abs(current_pos[1] - select_start[1]),
                 )
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and selecting:
-                if select_start is None:
+                if not select_start:
                     raise TypeError("No selection rect start point")  # Temporary handling, review later
 
                 selecting = False
@@ -1428,6 +1361,7 @@ if __name__ == "__main__":
                         unit.selected = True
                         selected_units.add(unit)
             console.handle_event(event)
+
         camera.update(selected_units, pygame.mouse.get_pos(), interface.panel_rect)
         global_units.update()
         iron_fields.update()
