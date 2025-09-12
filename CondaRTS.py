@@ -205,7 +205,7 @@ class Tank(GameObject):
                 self.recoil -= 1
 
     def draw(self, surface: pygame.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
+        surface.blit(self.image, camera.apply(self.rect).topleft)
         if self.selected:
             pygame.draw.circle(
                 surface, (255, 255, 255), camera.apply(self.rect).center, self.rect.width // 2 + 2, 2
