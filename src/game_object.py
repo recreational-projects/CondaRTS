@@ -50,8 +50,10 @@ class GameObject(pygame.sprite.Sprite):
                     self.rect.x += self.speed * dx / dist
                     self.rect.y += self.speed * dy / dist
                 self.rect.clamp_ip(pygame.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
+
             else:
                 self.target = None
+
         elif self.formation_target:
             dx, dy = (
                 self.formation_target[0] - self.rect.centerx,
@@ -62,6 +64,7 @@ class GameObject(pygame.sprite.Sprite):
                 self.rect.x += self.speed * dx / dist
                 self.rect.y += self.speed * dy / dist
             self.rect.clamp_ip(pygame.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
+
         elif self.target:
             dx, dy = (
                 self.target[0] - self.rect.centerx,
@@ -71,6 +74,7 @@ class GameObject(pygame.sprite.Sprite):
             if dist > 5:
                 self.rect.x += self.speed * dx / dist
                 self.rect.y += self.speed * dy / dist
+
             self.rect.clamp_ip(pygame.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
 
     def update(self, *args, **kwargs) -> None:
@@ -83,6 +87,7 @@ class GameObject(pygame.sprite.Sprite):
         health_ratio = self.health / self.max_health
         if not self.under_attack and health_ratio == 1.0:
             return
+
         color = (0, 255, 0) if health_ratio > 0.5 else (255, 0, 0)
         bar_width = max(10, self.rect.width * health_ratio)
         screen_rect = camera.apply(self.rect)

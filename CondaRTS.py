@@ -13,8 +13,11 @@ from src.fog_of_war import FogOfWar
 from src.game_console import GameConsole
 from src.game_object import GameObject
 from src.geometry import FloatCoord, IntCoord, calculate_formation_positions, snap_to_grid
+from src.infantry import Infantry
 from src.iron_field import IronField
 from src.particle import Particle
+from src.projectile import Projectile
+from src.tank import Tank
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -160,106 +163,6 @@ def handle_projectiles(projectiles, all_units, buildings) -> None:
 
         if hit or not (projectile.target and hasattr(projectile.target, "health") and projectile.target.health > 0):
             projectile.kill()  # Only kill projectile if it has no valid target or moves too far
-
-
-class Tank(GameObject):
-    ATTACK_RANGE = 200
-    ATTACK_COOLDOWN = 50
-    cost = 500
-
-    def __init__(self, position: IntCoord, team) -> None:
-        super().__init__(position=position, team=team)
-        self.base_image = pygame.Surface((30, 20), pygame.SRCALPHA)
-        # Draw tank body (front facing east/right)
-        pygame.draw.rect(self.base_image, (100, 100, 100), (0, 0, 30, 20))  # Hull
-        pygame.draw.rect(self.base_image, (80, 80, 80), (2, 2, 26, 16))  # Inner hull
-        pygame.draw.rect(self.base_image, (50, 50, 50), (0, -2, 30, 4))  # Tracks top
-        pygame.draw.rect(self.base_image, (50, 50, 50), (0, 18, 30, 4))  # Tracks bottom
-        self.barrel_image = pygame.Surface((20, 4), pygame.SRCALPHA)
-        pygame.draw.rect(self.barrel_image, (70, 70, 70), (0, 0, 20, 4))  # Barrel (extends right)
-        self.image = self.base_image
-        self.rect = self.image.get_rect(center=position)
-        self.speed = 2.5 if team == "GDI" else 3
-        self.health = 200 if team == "GDI" else 120
-        self.max_health = self.health
-        self.attack_damage = 20 if team == "GDI" else 15
-        self.angle: float = 0
-        self.recoil = 0
-        self.power_usage = 15
-        self.target_unit = None
-
-    def update(self) -> None:
-        super().update()
-        if self.target_unit and hasattr(self.target_unit, "health") and self.target_unit.health > 0:
-            dist = math.sqrt(
-                (self.rect.centerx - self.target_unit.rect.centerx) ** 2
-                + (self.rect.centery - self.target_unit.rect.centery) ** 2
-            )
-            self.target = self.target_unit.rect.center if dist <= 250 else None
-            self.target_unit = self.target_unit if self.target else None
-
-        if self.target:
-            dx, dy = (self.target[0] - self.rect.centerx, self.target[1] - self.rect.centery)
-            self.angle = math.degrees(math.atan2(dy, dx))  # Use dy instead of -dy to fix vertical direction
-            self.image = pygame.Surface((40, 40), pygame.SRCALPHA)
-            # Rotate base image to face target (base image faces east, so -angle aligns it correctly)
-            rotated_base = pygame.transform.rotate(self.base_image, -self.angle)
-            self.image.blit(rotated_base, rotated_base.get_rect(center=(20, 20)))
-            # Handle barrel with recoil
-            barrel_length = 20 - self.recoil * 2
-            barrel_image = pygame.Surface((barrel_length, 4), pygame.SRCALPHA)
-            pygame.draw.rect(barrel_image, (70, 70, 70), (0, 0, barrel_length, 4))
-            # Rotate barrel to match target direction
-            rotated_barrel = pygame.transform.rotate(barrel_image, -self.angle)  # Barrel also faces east initially
-            self.image.blit(rotated_barrel, rotated_barrel.get_rect(center=(20, 20)))
-            if self.recoil > 0:
-                self.recoil -= 1
-
-    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
-        surface.blit(self.image, camera.apply(self.rect).topleft)
-        if self.selected:
-            pygame.draw.circle(
-                surface, (255, 255, 255), camera.apply(self.rect).center, self.rect.width // 2 + 2, 2
-            )  # Circular selection
-        self.draw_health_bar(surface, camera)
-
-
-class Infantry(GameObject):
-    ATTACK_RANGE = 50
-    ATTACK_COOLDOWN = 25
-    cost = 100
-
-    def __init__(self, position: IntCoord, team) -> None:
-        super().__init__(position=position, team=team)
-        self.image = pygame.Surface((16, 16), pygame.SRCALPHA)
-        # Draw infantry as a simple soldier
-        pygame.draw.circle(self.image, (150, 150, 150), (8, 4), 4)  # Head
-        pygame.draw.rect(self.image, (100, 100, 100), (6, 8, 4, 8))  # Body
-        pygame.draw.line(self.image, (80, 80, 80), (8, 16), (8, 20))  # Legs
-        pygame.draw.line(self.image, (120, 120, 120), (10, 10), (14, 10))  # Gun
-        self.rect = self.image.get_rect(center=position)
-        self.speed = 3.5 if team == "GDI" else 4
-        self.health = 100 if team == "GDI" else 60
-        self.max_health = self.health
-        self.attack_damage = 8
-        self.power_usage = 5
-        self.target_unit = None
-
-    def update(self) -> None:
-        super().update()
-        if self.target_unit and hasattr(self.target_unit, "health") and self.target_unit.health > 0:
-            dist = math.sqrt(
-                (self.rect.centerx - self.target_unit.rect.centerx) ** 2
-                + (self.rect.centery - self.target_unit.rect.centery) ** 2
-            )
-            self.target = (self.target_unit.rect.centerx, self.target_unit.rect.centery) if dist <= 200 else None
-            self.target_unit = self.target_unit if self.target else None
-
-    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
-        surface.blit(self.image, camera.apply(self.rect).topleft)
-        if self.selected:
-            pygame.draw.circle(surface, (255, 255, 255), camera.apply(self.rect).center, 10, 2)
-        self.draw_health_bar(surface, camera)
 
 
 class Harvester(GameObject):
@@ -564,48 +467,6 @@ class Turret(Building):
         self.image.blit(base, (5, 5))
         self.image.blit(rotated_barrel, rotated_barrel.get_rect(center=(25, 25)))
         self.image.set_alpha(int(255 * self.construction_progress / Building.CONSTRUCTION_TIME))
-
-
-class Projectile(pygame.sprite.Sprite):
-    def __init__(self, *, position: IntCoord, target, damage, team) -> None:
-        super().__init__()
-        self.image = pygame.Surface((10, 5), pygame.SRCALPHA)
-        pygame.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))  # Brighter projectile
-        self.rect = self.image.get_rect(center=position)
-        self.target = target
-        self.speed = 6
-        self.damage = damage
-        self.team = team
-        self.particle_timer = 2
-
-    def update(self) -> None:
-        if self.target and hasattr(self.target, "health") and self.target.health > 0:
-            dx, dy = (self.target.rect.centerx - self.rect.centerx, self.target.rect.centery - self.rect.centery)
-            dist = math.sqrt(dx**2 + dy**2)
-            if dist > 3:
-                angle = math.atan2(dy, dx)
-                self.image = pygame.transform.rotate(pygame.Surface((10, 5), pygame.SRCALPHA), -math.degrees(angle))
-                pygame.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))
-                self.rect = self.image.get_rect(center=self.rect.center)
-                self.rect.x += self.speed * math.cos(angle)
-                self.rect.y += self.speed * math.sin(angle)
-                if self.particle_timer <= 0:
-                    particles.add(Particle.projectile_trail(position=self.rect.center, angle=angle))
-                    self.particle_timer = 2
-
-                else:
-                    self.particle_timer -= 1
-
-            else:
-                self.kill()
-                for _ in range(5):
-                    particles.add(Particle.projectile_explosion(self.rect.center))
-
-        else:
-            self.kill()
-
-    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
-        surface.blit(self.image, camera.apply(self.rect).topleft)
 
 
 class ProductionInterface:
@@ -1373,7 +1234,7 @@ if __name__ == "__main__":
         global_units.update()
         iron_fields.update()
         global_buildings.update(particles=particles)
-        projectiles.update()
+        projectiles.update(particles=particles)
         particles.update()
         handle_collisions(global_units)
         handle_attacks(player_units, global_units, global_buildings, projectiles, particles)
