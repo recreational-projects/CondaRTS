@@ -124,5 +124,5 @@ class Particle(pygame.sprite.Sprite):
             self.alpha = int(255 * self.lifetime / self.initial_lifetime)
             self.image.set_alpha(self.alpha)
 
-    def draw(self, *, surface: pygame.Surface, camera: Camera) -> None:
+    def draw(self, surface: pygame.Surface, camera: Camera) -> None:
         surface.blit(self.image, camera.apply(self.rect).topleft)
