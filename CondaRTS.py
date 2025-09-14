@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import math
 import random
 from enum import Enum
 
-import pygame
+import pygame as pg
 
 SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
 MAP_WIDTH, MAP_HEIGHT = 3200, 2400
@@ -65,7 +67,7 @@ def collides_with_building(x, y, building_class):
         if building_class == Turret
         else (60, 60)
     )
-    new_rect = pygame.Rect(x, y, building_size[0], building_size[1])
+    new_rect = pg.Rect(x, y, building_size[0], building_size[1])
     for building in buildings:
         if building.health > 0 and new_rect.colliderect(building.rect):
             return True
@@ -261,9 +263,7 @@ class Team(Enum):
 
 class Camera:
     def __init__(self, map_width, map_height):
-        self.rect = pygame.Rect(
-            0, 0, SCREEN_WIDTH - 200, SCREEN_HEIGHT - CONSOLE_HEIGHT
-        )
+        self.rect = pg.Rect(0, 0, SCREEN_WIDTH - 200, SCREEN_HEIGHT - CONSOLE_HEIGHT)
         self.map_width = map_width
         self.map_height = map_height
 
@@ -300,10 +300,10 @@ class Camera:
                 and self.rect.bottom < self.map_height
             ):
                 self.rect.y += 10
-        self.rect.clamp_ip(pygame.Rect(0, 0, self.map_width, self.map_height))
+        self.rect.clamp_ip(pg.Rect(0, 0, self.map_width, self.map_height))
 
     def apply(self, rect):
-        return pygame.Rect(
+        return pg.Rect(
             rect.x - self.rect.x, rect.y - self.rect.y, rect.width, rect.height
         )
 
@@ -325,7 +325,7 @@ class FogOfWar:
         self.visible = [
             [False] * (map_height // tile_size) for _ in range(map_width // tile_size)
         ]
-        self.surface = pygame.Surface((map_width, map_height), pygame.SRCALPHA)
+        self.surface = pg.Surface((map_width, map_height), pg.SRCALPHA)
         self.surface.fill((0, 0, 0, 255))
 
     def reveal(self, center, radius):
@@ -389,7 +389,7 @@ class FogOfWar:
             for x in range(len(self.explored)):
                 if self.explored[x][y]:
                     alpha = 0 if self.visible[x][y] else 100
-                    pygame.draw.rect(
+                    pg.draw.rect(
                         self.surface,
                         (0, 0, 0, alpha),
                         (
@@ -402,7 +402,7 @@ class FogOfWar:
         screen.blit(self.surface, (-camera.rect.x, -camera.rect.y))
 
 
-class GameObject(pygame.sprite.Sprite):
+class GameObject(pg.sprite.Sprite):
     cost = 0
 
     def __init__(self, x, y, team):
@@ -440,7 +440,7 @@ class GameObject(pygame.sprite.Sprite):
                 if dist > 5:
                     self.rect.x += self.speed * dx / dist
                     self.rect.y += self.speed * dy / dist
-                self.rect.clamp_ip(pygame.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
+                self.rect.clamp_ip(pg.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
             else:
                 self.target = None
         elif self.formation_target:
@@ -452,7 +452,7 @@ class GameObject(pygame.sprite.Sprite):
             if dist > 5:
                 self.rect.x += self.speed * dx / dist
                 self.rect.y += self.speed * dy / dist
-            self.rect.clamp_ip(pygame.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
+            self.rect.clamp_ip(pg.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
         elif self.target:
             dx, dy = (
                 self.target[0] - self.rect.centerx,
@@ -462,7 +462,7 @@ class GameObject(pygame.sprite.Sprite):
             if dist > 5:
                 self.rect.x += self.speed * dx / dist
                 self.rect.y += self.speed * dy / dist
-            self.rect.clamp_ip(pygame.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
+            self.rect.clamp_ip(pg.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
 
     def update(self):
         self.move_toward()
@@ -476,15 +476,13 @@ class GameObject(pygame.sprite.Sprite):
         color = (0, 255, 0) if health_ratio > 0.5 else (255, 0, 0)
         bar_width = max(10, self.rect.width * health_ratio)
         screen_rect = camera.apply(self.rect)
-        pygame.draw.rect(
+        pg.draw.rect(
             screen,
             (0, 0, 0),
             (screen_rect.x - 1, screen_rect.y - 16, self.rect.width + 2, 10),
         )  # Background
-        pygame.draw.rect(
-            screen, color, (screen_rect.x, screen_rect.y - 15, bar_width, 8)
-        )
-        pygame.draw.rect(
+        pg.draw.rect(screen, color, (screen_rect.x, screen_rect.y - 15, bar_width, 8))
+        pg.draw.rect(
             screen,
             (255, 255, 255),
             (screen_rect.x, screen_rect.y - 15, self.rect.width, 8),
@@ -497,14 +495,14 @@ class Tank(GameObject):
 
     def __init__(self, x, y, team):
         super().__init__(x, y, team)
-        self.base_image = pygame.Surface((30, 20), pygame.SRCALPHA)
+        self.base_image = pg.Surface((30, 20), pg.SRCALPHA)
         # Draw tank body (front facing east/right)
-        pygame.draw.rect(self.base_image, (100, 100, 100), (0, 0, 30, 20))  # Hull
-        pygame.draw.rect(self.base_image, (80, 80, 80), (2, 2, 26, 16))  # Inner hull
-        pygame.draw.rect(self.base_image, (50, 50, 50), (0, -2, 30, 4))  # Tracks top
-        pygame.draw.rect(self.base_image, (50, 50, 50), (0, 18, 30, 4))  # Tracks bottom
-        self.barrel_image = pygame.Surface((20, 4), pygame.SRCALPHA)
-        pygame.draw.rect(
+        pg.draw.rect(self.base_image, (100, 100, 100), (0, 0, 30, 20))  # Hull
+        pg.draw.rect(self.base_image, (80, 80, 80), (2, 2, 26, 16))  # Inner hull
+        pg.draw.rect(self.base_image, (50, 50, 50), (0, -2, 30, 4))  # Tracks top
+        pg.draw.rect(self.base_image, (50, 50, 50), (0, 18, 30, 4))  # Tracks bottom
+        self.barrel_image = pg.Surface((20, 4), pg.SRCALPHA)
+        pg.draw.rect(
             self.barrel_image, (70, 70, 70), (0, 0, 20, 4)
         )  # Barrel (extends right)
         self.image = self.base_image
@@ -545,16 +543,16 @@ class Tank(GameObject):
             self.angle = math.degrees(
                 math.atan2(dy, dx)
             )  # Use dy instead of -dy to fix vertical direction
-            self.image = pygame.Surface((40, 40), pygame.SRCALPHA)
+            self.image = pg.Surface((40, 40), pg.SRCALPHA)
             # Rotate base image to face target (base image faces east, so -angle aligns it correctly)
-            rotated_base = pygame.transform.rotate(self.base_image, -self.angle)
+            rotated_base = pg.transform.rotate(self.base_image, -self.angle)
             self.image.blit(rotated_base, rotated_base.get_rect(center=(20, 20)))
             # Handle barrel with recoil
             barrel_length = 20 - self.recoil * 2
-            barrel_image = pygame.Surface((barrel_length, 4), pygame.SRCALPHA)
-            pygame.draw.rect(barrel_image, (70, 70, 70), (0, 0, barrel_length, 4))
+            barrel_image = pg.Surface((barrel_length, 4), pg.SRCALPHA)
+            pg.draw.rect(barrel_image, (70, 70, 70), (0, 0, barrel_length, 4))
             # Rotate barrel to match target direction
-            rotated_barrel = pygame.transform.rotate(
+            rotated_barrel = pg.transform.rotate(
                 barrel_image, -self.angle
             )  # Barrel also faces east initially
             self.image.blit(rotated_barrel, rotated_barrel.get_rect(center=(20, 20)))
@@ -564,7 +562,7 @@ class Tank(GameObject):
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self.rect).topleft)
         if self.selected:
-            pygame.draw.circle(
+            pg.draw.circle(
                 screen,
                 (255, 255, 255),
                 camera.apply(self.rect).center,
@@ -579,12 +577,12 @@ class Infantry(GameObject):
 
     def __init__(self, x, y, team):
         super().__init__(x, y, team)
-        self.image = pygame.Surface((16, 16), pygame.SRCALPHA)
+        self.image = pg.Surface((16, 16), pg.SRCALPHA)
         # Draw infantry as a simple soldier
-        pygame.draw.circle(self.image, (150, 150, 150), (8, 4), 4)  # Head
-        pygame.draw.rect(self.image, (100, 100, 100), (6, 8, 4, 8))  # Body
-        pygame.draw.line(self.image, (80, 80, 80), (8, 16), (8, 20))  # Legs
-        pygame.draw.line(self.image, (120, 120, 120), (10, 10), (14, 10))  # Gun
+        pg.draw.circle(self.image, (150, 150, 150), (8, 4), 4)  # Head
+        pg.draw.rect(self.image, (100, 100, 100), (6, 8, 4, 8))  # Body
+        pg.draw.line(self.image, (80, 80, 80), (8, 16), (8, 20))  # Legs
+        pg.draw.line(self.image, (120, 120, 120), (10, 10), (14, 10))  # Gun
         self.rect = self.image.get_rect(center=(x, y))
         self.speed = 3.5 if team == Team.GDI.value else 4
         self.health = 100 if team == Team.GDI.value else 60
@@ -616,7 +614,7 @@ class Infantry(GameObject):
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self.rect).topleft)
         if self.selected:
-            pygame.draw.circle(
+            pg.draw.circle(
                 screen, (255, 255, 255), camera.apply(self.rect).center, 10, 2
             )
         self.draw_health_bar(screen, camera)
@@ -627,12 +625,12 @@ class Harvester(GameObject):
 
     def __init__(self, x, y, team, headquarters):
         super().__init__(x, y, team)
-        self.image = pygame.Surface((50, 30), pygame.SRCALPHA)
+        self.image = pg.Surface((50, 30), pg.SRCALPHA)
         # Draw harvester as a truck
-        pygame.draw.rect(self.image, (120, 120, 120), (0, 0, 50, 30))  # Body
-        pygame.draw.rect(self.image, (100, 100, 100), (5, 5, 40, 20))  # Cargo area
-        pygame.draw.circle(self.image, (50, 50, 50), (10, 30), 5)  # Wheel 1
-        pygame.draw.circle(self.image, (50, 50, 50), (40, 30), 5)  # Wheel 2
+        pg.draw.rect(self.image, (120, 120, 120), (0, 0, 50, 30))  # Body
+        pg.draw.rect(self.image, (100, 100, 100), (5, 5, 40, 20))  # Cargo area
+        pg.draw.circle(self.image, (50, 50, 50), (10, 30), 5)  # Wheel 1
+        pg.draw.circle(self.image, (50, 50, 50), (40, 30), 5)  # Wheel 2
         self.rect = self.image.get_rect(center=(x, y))
         self.speed = 2.5
         self.health = 300
@@ -728,7 +726,7 @@ class Harvester(GameObject):
     def draw(self, screen, camera):
         screen.blit(self.image, camera.apply(self.rect).topleft)
         if self.selected:
-            pygame.draw.rect(screen, (255, 255, 255), camera.apply(self.rect), 2)
+            pg.draw.rect(screen, (255, 255, 255), camera.apply(self.rect), 2)
         self.draw_health_bar(screen, camera)
         if self.iron > 0:
             screen.blit(
@@ -740,20 +738,20 @@ class Harvester(GameObject):
 class Building(GameObject):
     def __init__(self, x, y, team, size, color, health, cost, power_usage):
         super().__init__(x, y, team)
-        self.image = pygame.Surface(size, pygame.SRCALPHA)
+        self.image = pg.Surface(size, pg.SRCALPHA)
         # Add details to building
-        pygame.draw.rect(self.image, color, (0, 0, size[0], size[1]))  # Base
+        pg.draw.rect(self.image, color, (0, 0, size[0], size[1]))  # Base
         # Clamp color values to prevent negative values
         inner_color = (
             max(0, color[0] - 50),
             max(0, color[1] - 50),
             max(0, color[2] - 50),
         )
-        pygame.draw.rect(
+        pg.draw.rect(
             self.image, inner_color, (5, 5, size[0] - 10, size[1] - 10)
         )  # Inner
         for i in range(10, size[0] - 10, 20):
-            pygame.draw.rect(self.image, (200, 200, 200), (i, 10, 10, 10))  # Windows
+            pg.draw.rect(self.image, (200, 200, 200), (i, 10, 10, 10))  # Windows
         self.rect = self.image.get_rect(topleft=(x, y))
         self.health = health
         self.max_health = health
@@ -1066,12 +1064,12 @@ class Turret(Building):
                     )
             else:
                 self.target_unit = None
-        self.image = pygame.Surface((50, 50), pygame.SRCALPHA)
-        base = pygame.Surface((40, 40), pygame.SRCALPHA)
+        self.image = pg.Surface((50, 50), pg.SRCALPHA)
+        base = pg.Surface((40, 40), pg.SRCALPHA)
         base.fill((180, 180, 0) if self.team == Team.GDI.value else (180, 0, 0))
-        barrel = pygame.Surface((25, 6), pygame.SRCALPHA)
-        pygame.draw.line(barrel, (80, 80, 80), (0, 3), (18, 3), 4)
-        rotated_barrel = pygame.transform.rotate(barrel, self.angle)
+        barrel = pg.Surface((25, 6), pg.SRCALPHA)
+        pg.draw.line(barrel, (80, 80, 80), (0, 3), (18, 3), 4)
+        rotated_barrel = pg.transform.rotate(barrel, self.angle)
         self.image.blit(base, (5, 5))
         self.image.blit(rotated_barrel, rotated_barrel.get_rect(center=(25, 25)))
         self.image.set_alpha(
@@ -1079,11 +1077,11 @@ class Turret(Building):
         )
 
 
-class Particle(pygame.sprite.Sprite):
+class Particle(pg.sprite.Sprite):
     def __init__(self, x, y, vx, vy, size, color, lifetime):
         super().__init__()
-        self.image = pygame.Surface((size, size), pygame.SRCALPHA)
-        pygame.draw.circle(self.image, color, (size // 2, size // 2), size // 2)
+        self.image = pg.Surface((size, size), pg.SRCALPHA)
+        pg.draw.circle(self.image, color, (size // 2, size // 2), size // 2)
         self.rect = self.image.get_rect(center=(x, y))
         self.vx, self.vy = vx, vy
         self.lifetime = lifetime
@@ -1104,13 +1102,11 @@ class Particle(pygame.sprite.Sprite):
         screen.blit(self.image, camera.apply(self.rect).topleft)
 
 
-class Projectile(pygame.sprite.Sprite):
+class Projectile(pg.sprite.Sprite):
     def __init__(self, x, y, target, damage, team):
         super().__init__()
-        self.image = pygame.Surface((10, 5), pygame.SRCALPHA)
-        pygame.draw.ellipse(
-            self.image, (255, 200, 0), (0, 0, 10, 5)
-        )  # Brighter projectile
+        self.image = pg.Surface((10, 5), pg.SRCALPHA)
+        pg.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))  # Brighter projectile
         self.rect = self.image.get_rect(center=(x, y))
         self.target = target
         self.speed = 6
@@ -1127,10 +1123,10 @@ class Projectile(pygame.sprite.Sprite):
             dist = math.sqrt(dx**2 + dy**2)
             if dist > 3:
                 angle = math.atan2(dy, dx)
-                self.image = pygame.transform.rotate(
-                    pygame.Surface((10, 5), pygame.SRCALPHA), -math.degrees(angle)
+                self.image = pg.transform.rotate(
+                    pg.Surface((10, 5), pg.SRCALPHA), -math.degrees(angle)
                 )
-                pygame.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))
+                pg.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))
                 self.rect = self.image.get_rect(center=self.rect.center)
                 self.rect.x += self.speed * math.cos(angle)
                 self.rect.y += self.speed * math.sin(angle)
@@ -1170,11 +1166,11 @@ class Projectile(pygame.sprite.Sprite):
         screen.blit(self.image, camera.apply(self.rect).topleft)
 
 
-class IronField(pygame.sprite.Sprite):
+class IronField(pg.sprite.Sprite):
     def __init__(self, x, y, resources=5000):
         super().__init__()
-        self.image = pygame.Surface((40, 40), pygame.SRCALPHA)
-        pygame.draw.polygon(
+        self.image = pg.Surface((40, 40), pg.SRCALPHA)
+        pg.draw.polygon(
             self.image, (0, 200, 0), [(0, 20), (20, 0), (40, 20), (20, 40)]
         )  # Diamond shape for crystal
         self.rect = self.image.get_rect(topleft=(x, y))
@@ -1200,18 +1196,18 @@ class IronField(pygame.sprite.Sprite):
 class ProductionInterface:
     def __init__(self, headquarters):
         self.headquarters = headquarters
-        self.panel_rect = pygame.Rect(
+        self.panel_rect = pg.Rect(
             SCREEN_WIDTH - 200, 0, 200, SCREEN_HEIGHT - CONSOLE_HEIGHT
         )
         self.current_tab = "Units"
         self.tab_buttons = [
-            (pygame.Rect(SCREEN_WIDTH - 180, 10 + i * 40, 160, 30), tab)
+            (pg.Rect(SCREEN_WIDTH - 180, 10 + i * 40, 160, 30), tab)
             for i, tab in enumerate(["Units", "Buildings", "Defensive"])
         ]
         self.buttons = {
             "Units": [
                 (
-                    pygame.Rect(SCREEN_WIDTH - 180, 130 + i * 50, 160, 40),
+                    pg.Rect(SCREEN_WIDTH - 180, 130 + i * 50, 160, 40),
                     cls,
                     lambda t, cls=cls: cls.cost,
                     lambda: req,
@@ -1250,7 +1246,7 @@ class ProductionInterface:
             ],
             "Buildings": [
                 (
-                    pygame.Rect(SCREEN_WIDTH - 180, 130 + i * 50, 160, 40),
+                    pg.Rect(SCREEN_WIDTH - 180, 130 + i * 50, 160, 40),
                     cls,
                     lambda t, cls=cls: cls.cost,
                     lambda: True,
@@ -1261,13 +1257,13 @@ class ProductionInterface:
             ],
             "Defensive": [
                 (
-                    pygame.Rect(SCREEN_WIDTH - 180, 130, 160, 40),
+                    pg.Rect(SCREEN_WIDTH - 180, 130, 160, 40),
                     Turret,
                     lambda t, cls=Turret: cls.cost,
                     lambda: True,
                 ),
                 (
-                    pygame.Rect(SCREEN_WIDTH - 180, 180, 160, 40),
+                    pg.Rect(SCREEN_WIDTH - 180, 180, 160, 40),
                     None,
                     lambda t: 0,
                     lambda: True,
@@ -1287,8 +1283,8 @@ class ProductionInterface:
         }
 
     def draw(self, screen, iron):
-        pygame.draw.rect(screen, (60, 60, 60), self.panel_rect)  # Darker panel
-        pygame.draw.rect(screen, (100, 100, 100), self.panel_rect, 2)  # Border
+        pg.draw.rect(screen, (60, 60, 60), self.panel_rect)  # Darker panel
+        pg.draw.rect(screen, (100, 100, 100), self.panel_rect, 2)  # Border
         screen.blit(
             font.render(
                 f"Power: {self.headquarters.power_output}/{self.headquarters.power_usage}",
@@ -1298,7 +1294,7 @@ class ProductionInterface:
             (SCREEN_WIDTH - 180, 10),
         )
         for rect, tab_name in self.tab_buttons:
-            pygame.draw.rect(
+            pg.draw.rect(
                 screen,
                 (0, 200, 200) if tab_name == self.current_tab else (50, 50, 50),
                 rect,
@@ -1316,7 +1312,7 @@ class ProductionInterface:
                 or (unit_class is None and selected_building)
                 else (200, 0, 0)
             )
-            pygame.draw.rect(screen, color, rect, border_radius=5)
+            pg.draw.rect(screen, color, rect, border_radius=5)
             screen.blit(
                 font.render(
                     f"{self.button_labels[unit_class]} ({cost if unit_class else ''})",
@@ -1342,14 +1338,12 @@ class ProductionInterface:
                     else Headquarters
                 )
             )
-            pygame.draw.rect(
+            pg.draw.rect(
                 screen, (0, 255, 0), (SCREEN_WIDTH - 180, 340, int(160 * progress), 10)
             )
-            pygame.draw.rect(
-                screen, (255, 255, 255), (SCREEN_WIDTH - 180, 340, 160, 10), 1
-            )
+            pg.draw.rect(screen, (255, 255, 255), (SCREEN_WIDTH - 180, 340, 160, 10), 1)
         if self.headquarters.pending_building:
-            mouse_pos = pygame.mouse.get_pos()
+            mouse_pos = pg.mouse.get_pos()
             world_pos = snap_to_grid(*camera.screen_to_world(mouse_pos))
             building_size = (
                 (80, 80)
@@ -1358,7 +1352,7 @@ class ProductionInterface:
                 if self.headquarters.pending_building == Turret
                 else (60, 60)
             )
-            temp_surface = pygame.Surface(building_size, pygame.SRCALPHA)
+            temp_surface = pg.Surface(building_size, pg.SRCALPHA)
             temp_surface.fill(
                 GDI_COLOR if self.headquarters.team == Team.GDI.value else NOD_COLOR
             )
@@ -1368,7 +1362,7 @@ class ProductionInterface:
             ) and not collides_with_building(
                 world_pos[0], world_pos[1], self.headquarters.pending_building
             )
-            pygame.draw.rect(
+            pg.draw.rect(
                 temp_surface,
                 VALID_PLACEMENT_COLOR if valid else INVALID_PLACEMENT_COLOR,
                 (0, 0, building_size[0], building_size[1]),
@@ -1415,7 +1409,7 @@ class ProductionInterface:
 
 class GameConsole:
     def __init__(self):
-        self.rect = pygame.Rect(
+        self.rect = pg.Rect(
             0, SCREEN_HEIGHT - CONSOLE_HEIGHT, SCREEN_WIDTH, CONSOLE_HEIGHT
         )
         self.lines = []
@@ -1430,8 +1424,8 @@ class GameConsole:
             self.lines.pop(0)
 
     def draw(self, screen):
-        pygame.draw.rect(screen, (40, 40, 40), self.rect)  # Darker console
-        pygame.draw.rect(screen, (80, 80, 80), self.rect, 2)
+        pg.draw.rect(screen, (40, 40, 40), self.rect)  # Darker console
+        pg.draw.rect(screen, (80, 80, 80), self.rect, 2)
         visible_lines = self.lines[self.scroll_offset :]
         for i, line in enumerate(visible_lines):
             if i >= self.max_lines:
@@ -1445,15 +1439,15 @@ class GameConsole:
             if len(self.lines) > self.max_lines
             else 0
         )
-        pygame.draw.rect(
+        pg.draw.rect(
             screen,
             (150, 150, 150),
             (self.rect.right - 15, self.rect.y + 5 + scroll_pos, 10, 20),
         )
 
     def handle_event(self, event):
-        mouse_pos = pygame.mouse.get_pos()
-        if event.type == pygame.MOUSEWHEEL:
+        mouse_pos = pg.mouse.get_pos()
+        if event.type == pg.MOUSEWHEEL:
             if self.rect.collidepoint(mouse_pos):
                 max_scroll = max(0, len(self.lines) - self.max_lines)
                 scroll_amount = event.y * self.scroll_speed
@@ -1463,23 +1457,23 @@ class GameConsole:
                 print(
                     f"Console scroll detected: y={event.y}, scroll_offset={self.scroll_offset}"
                 )
-        elif event.type == pygame.KEYDOWN:
+        elif event.type == pg.KEYDOWN:
             if self.rect.collidepoint(mouse_pos):
                 max_scroll = max(0, len(self.lines) - self.max_lines)
-                if event.key == pygame.K_UP:
+                if event.key == pg.K_UP:
                     self.scroll_offset = max(0, self.scroll_offset - 1)
                     print(f"Console scroll up: scroll_offset={self.scroll_offset}")
-                elif event.key == pygame.K_DOWN:
+                elif event.key == pg.K_DOWN:
                     self.scroll_offset = min(max_scroll, self.scroll_offset + 1)
                     print(f"Console scroll down: scroll_offset={self.scroll_offset}")
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+        elif event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
             if self.rect.collidepoint(event.pos):
                 start_y = self.rect.y + 5
                 line_idx = (event.pos[1] - start_y) // 18 + self.scroll_offset
                 if 0 <= line_idx < len(self.lines):
                     self.selected_text = self.lines[line_idx]
                     try:
-                        pygame.scrap.put_text(pygame.SCRAP_TEXT)
+                        pg.scrap.put_text(pg.SCRAP_TEXT)
                         print(f"Copied to clipboard: {self.selected_text}")
                     except Exception as e:
                         print(f"Failed to copy to clipboard: {e}")
@@ -2024,38 +2018,38 @@ class AI:
 
 
 if __name__ == "__main__":
-    pygame.init()
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    clock = pygame.time.Clock()
-    font = pygame.font.SysFont(None, 24)
-    console_font = pygame.font.SysFont(None, 18)
-    player_units = pygame.sprite.Group()
-    enemy_units = pygame.sprite.Group()
-    all_units = pygame.sprite.Group()
-    iron_fields = pygame.sprite.Group()
-    buildings = pygame.sprite.Group()
-    projectiles = pygame.sprite.Group()
-    particles = pygame.sprite.Group()
+    pg.init()
+    screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    clock = pg.time.Clock()
+    font = pg.font.SysFont(None, 24)
+    console_font = pg.font.SysFont(None, 18)
+    player_units = pg.sprite.Group()
+    enemy_units = pg.sprite.Group()
+    all_units = pg.sprite.Group()
+    iron_fields = pg.sprite.Group()
+    buildings = pg.sprite.Group()
+    projectiles = pg.sprite.Group()
+    particles = pg.sprite.Group()
     gdi_headquarters = Headquarters(300, 300, Team.GDI.value)
     nod_headquarters = Headquarters(2000, 1200, Team.NOD.value)
     nod_headquarters.iron = 1500
     interface = ProductionInterface(gdi_headquarters)
     console = GameConsole()
     fog_of_war = FogOfWar(MAP_WIDTH, MAP_HEIGHT)
-    selected_units = pygame.sprite.Group()
+    selected_units = pg.sprite.Group()
     selected_building = None
     selecting = False
     select_start = None
     select_rect = None
     camera = Camera(MAP_WIDTH, MAP_HEIGHT)
-    base_map = pygame.Surface((MAP_WIDTH, MAP_HEIGHT))
+    base_map = pg.Surface((MAP_WIDTH, MAP_HEIGHT))
     # Improved map with grass texture
     for x in range(0, MAP_WIDTH, TILE_SIZE):
         for y in range(0, MAP_HEIGHT, TILE_SIZE):
             color = (0, random.randint(100, 150), 0)
-            pygame.draw.rect(base_map, color, (x, y, TILE_SIZE, TILE_SIZE))
+            pg.draw.rect(base_map, color, (x, y, TILE_SIZE, TILE_SIZE))
             if random.random() < 0.1:
-                pygame.draw.circle(
+                pg.draw.circle(
                     base_map,
                     (0, 80, 0),
                     (x + TILE_SIZE // 2, y + TILE_SIZE // 2),
@@ -2086,10 +2080,10 @@ if __name__ == "__main__":
 
     running = True
     while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
                 running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN:
+            elif event.type == pg.MOUSEBUTTONDOWN:
                 target_x, target_y = event.pos
                 world_x, world_y = camera.screen_to_world((target_x, target_y))
                 if event.button == 1:
@@ -2121,7 +2115,7 @@ if __name__ == "__main__":
                         selected_building = None
                         selecting = True
                         select_start = event.pos
-                        select_rect = pygame.Rect(target_x, target_y, 0, 0)
+                        select_rect = pg.Rect(target_x, target_y, 0, 0)
                 elif event.button == 3:
                     if gdi_headquarters.pending_building:
                         gdi_headquarters.pending_building = (
@@ -2186,22 +2180,22 @@ if __name__ == "__main__":
                             elif clicked_field:
                                 unit.target = clicked_field.rect.center
                                 unit.formation_target = None
-            elif event.type == pygame.MOUSEMOTION and selecting:
+            elif event.type == pg.MOUSEMOTION and selecting:
                 current_pos = event.pos
-                select_rect = pygame.Rect(
+                select_rect = pg.Rect(
                     min(select_start[0], current_pos[0]),
                     min(select_start[1], current_pos[1]),
                     abs(current_pos[0] - select_start[0]),
                     abs(current_pos[1] - select_start[1]),
                 )
-            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and selecting:
+            elif event.type == pg.MOUSEBUTTONUP and event.button == 1 and selecting:
                 selecting = False
                 for unit in player_units:
                     unit.selected = False
                 selected_units.empty()
                 world_start = camera.screen_to_world(select_start)
                 world_end = camera.screen_to_world(event.pos)
-                world_rect = pygame.Rect(
+                world_rect = pg.Rect(
                     min(world_start[0], world_end[0]),
                     min(world_start[1], world_end[1]),
                     abs(world_end[0] - world_start[0]),
@@ -2212,7 +2206,7 @@ if __name__ == "__main__":
                         unit.selected = True
                         selected_units.add(unit)
             console.handle_event(event)
-        camera.update(selected_units, pygame.mouse.get_pos(), interface.panel_rect)
+        camera.update(selected_units, pg.mouse.get_pos(), interface.panel_rect)
         all_units.update()
         iron_fields.update()
         buildings.update()
@@ -2261,12 +2255,12 @@ if __name__ == "__main__":
             (10, 10),
         )
         if selecting and select_rect:
-            pygame.draw.rect(screen, (255, 255, 255), select_rect, 2)
+            pg.draw.rect(screen, (255, 255, 255), select_rect, 2)
         console.draw(screen)
         for obj in all_units:
             if hasattr(obj, "under_attack") and obj.under_attack:
                 obj.under_attack = False
-        pygame.display.flip()
+        pg.display.flip()
         clock.tick(60)
 
-    pygame.quit()
+    pg.quit()
