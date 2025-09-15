@@ -7,7 +7,7 @@ from enum import Enum
 import pygame as pg
 
 SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
-MAP_WIDTH, MAP_HEIGHT = 3200, 2400
+MAP_WIDTH, MAP_HEIGHT = 1600, 800
 TILE_SIZE = 32
 BUILDING_RANGE = 160
 BASE_PRODUCTION_TIME = 180
@@ -2031,7 +2031,7 @@ if __name__ == "__main__":
     projectiles = pg.sprite.Group()
     particles = pg.sprite.Group()
     gdi_headquarters = Headquarters(300, 300, Team.GDI.value)
-    nod_headquarters = Headquarters(2000, 1200, Team.NOD.value)
+    nod_headquarters = Headquarters(MAP_WIDTH - 300, MAP_HEIGHT - 300, Team.NOD.value)
     nod_headquarters.iron = 1500
     interface = ProductionInterface(gdi_headquarters)
     console = GameConsole()
@@ -2218,6 +2218,8 @@ if __name__ == "__main__":
         handle_projectiles(projectiles, all_units, buildings)
         ai.update()
         fog_of_war.update_visibility(player_units, buildings, Team.GDI.value)
+
+        screen.fill(pg.Color("black"))
         screen.blit(base_map, (-camera.rect.x, -camera.rect.y))
         for field in iron_fields:
             if field.resources > 0 and fog_of_war.is_tile_explored(
