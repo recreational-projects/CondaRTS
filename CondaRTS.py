@@ -1111,11 +1111,21 @@ class IronField(pg.sprite.Sprite):
 
 @dataclass(kw_only=True)
 class ProductionInterface:
+    """Interface for player."""
+
     WIDTH: ClassVar = 200
     MARGIN_X: ClassVar = 20
+    BUTTON_SPACING_Y: ClassVar = 10
     TAB_BUTTON_HEIGHT: ClassVar = 30
     ACTION_BUTTON_Y: ClassVar = 130
     ACTION_BUTTON_HEIGHT: ClassVar = 40
+    FILL_COLOR: ClassVar = pg.Color(60, 60, 60)
+    LINE_COLOR: ClassVar = pg.Color(100, 100, 100)
+    ACTIVE_TAB_COLOR: ClassVar = pg.Color(0, 200, 200)
+    INACTIVE_TAB_COLOR: ClassVar = pg.Color(50, 50, 50)
+    ACTION_ALLOWED_COLOR: ClassVar = pg.Color(0, 200, 0)
+    ACTION_BLOCKED_COLOR: ClassVar = pg.Color(200, 0, 0)
+    MAX_PRODUCTION_QUEUE_LENGTH: ClassVar = 5
 
     _POS_X = SCREEN_WIDTH - WIDTH
     _CONTENT_POS_X = _POS_X + MARGIN_X
@@ -1124,7 +1134,8 @@ class ProductionInterface:
     headquarters: Headquarters
     panel_rect: pg.Rect = dataclass_field(init=False)
     tab_buttons: list = dataclass_field(default_factory=list)
-    action_buttons: dict = dataclass_field(default_factory=dict)
+    buy_buttons: dict = dataclass_field(default_factory=dict)
+    sell_button: pg.Rect = dataclass_field(init=False)
     current_tab = "Units"
 
     def __post_init__(self) -> None:
@@ -1134,20 +1145,24 @@ class ProductionInterface:
         self.tab_buttons = [
             (
                 pg.Rect(
-                    (self._CONTENT_POS_X, 10 + i * (self.TAB_BUTTON_HEIGHT + 10)),
+                    (
+                        self._CONTENT_POS_X,
+                        10 + i * (self.TAB_BUTTON_HEIGHT + self.BUTTON_SPACING_Y),
+                    ),
                     (self._BUTTON_WIDTH, self.TAB_BUTTON_HEIGHT),
                 ),
                 tab,
             )
             for i, tab in enumerate(["Units", "Buildings", "Defensive"])
         ]
-        self.action_buttons = {
+        self.buy_buttons = {
             "Units": [
                 (
                     pg.Rect(
                         (
                             self._CONTENT_POS_X,
-                            self.ACTION_BUTTON_Y + i * (self.ACTION_BUTTON_HEIGHT + 10),
+                            self.ACTION_BUTTON_Y
+                            + i * (self.ACTION_BUTTON_HEIGHT + self.BUTTON_SPACING_Y),
                         ),
                         (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
                     ),
@@ -1191,7 +1206,8 @@ class ProductionInterface:
                     pg.Rect(
                         (
                             self._CONTENT_POS_X,
-                            self.ACTION_BUTTON_Y + i * (self.ACTION_BUTTON_HEIGHT + 10),
+                            self.ACTION_BUTTON_Y
+                            + i * (self.ACTION_BUTTON_HEIGHT + self.BUTTON_SPACING_Y),
                         ),
                         (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
                     ),
@@ -1211,18 +1227,14 @@ class ProductionInterface:
                     Turret,
                     lambda: True,
                 ),
-                # sell button:
-                (
-                    pg.Rect(
-                        (self._CONTENT_POS_X, 180),
-                        (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
-                    ),
-                    None,
-                    lambda: True,
-                ),
             ],
         }
-        self.button_labels = {
+        self.sell_button = pg.Rect(
+            (self._CONTENT_POS_X, 330),
+            (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
+        )
+
+        self.sell_button_labels = {
             Tank: "Tank",
             Infantry: "Infantry",
             Harvester: "Harvester",
@@ -1231,52 +1243,74 @@ class ProductionInterface:
             PowerPlant: "Power Plant",
             Headquarters: "Headquarters",
             Turret: "Turret",
-            None: "Sell",
         }
 
-    def draw(self, surface: pg.Surface, iron) -> None:
-        pg.draw.rect(surface, (60, 60, 60), self.panel_rect)  # Darker panel
-        pg.draw.rect(surface, (100, 100, 100), self.panel_rect, 2)  # Border
+    def draw(self, surface: pg.Surface, iron: int) -> None:
+        """Draw to the `surface`."""
+        pg.draw.rect(surface, self.FILL_COLOR, self.panel_rect)
+        pg.draw.rect(surface, self.LINE_COLOR, self.panel_rect, width=2)
         surface.blit(
             font.render(
-                f"Power: {self.headquarters.power_output}/{self.headquarters.power_usage}",
-                True,
-                (0, 255, 0) if self.headquarters.has_enough_power else (255, 0, 0),
+                f"Power: {self.headquarters.power_output}"
+                f"/{self.headquarters.power_usage}",
+                color=(
+                    pg.Color("green")
+                    if self.headquarters.has_enough_power
+                    else pg.Color("red")
+                ),
+                antialias=True,
             ),
-            (self._CONTENT_POS_X, 10),
+            (self._CONTENT_POS_X, self.BUTTON_SPACING_Y),
         )
         for rect, tab_name in self.tab_buttons:
             pg.draw.rect(
                 surface,
-                (0, 200, 200) if tab_name == self.current_tab else (50, 50, 50),
+                self.ACTIVE_TAB_COLOR
+                if tab_name == self.current_tab
+                else self.INACTIVE_TAB_COLOR,
                 rect,
                 border_radius=5,
             )
             surface.blit(
-                font.render(tab_name, True, (255, 255, 255)), (rect.x + 10, rect.y + 10)
+                font.render(tab_name, color=pg.Color("white"), antialias=True),
+                (rect.x + 10, rect.y + 10),
             )
-        for rect, unit_class, req_fn in self.action_buttons[self.current_tab]:
-            cost = unit_class.COST if unit_class else 0
+
+        for rect, unit_class, req_fn in self.buy_buttons[self.current_tab]:
+            cost = unit_class.COST
             can_produce = iron >= cost and req_fn()
-            color = (
-                (0, 200, 0)
+            buy_fill_color = (
+                self.ACTION_ALLOWED_COLOR
                 if (unit_class and can_produce)
-                or (unit_class is None and selected_building)
-                else (200, 0, 0)
+                else self.ACTION_BLOCKED_COLOR
             )
-            pg.draw.rect(surface, color, rect, border_radius=5)
+            pg.draw.rect(surface, buy_fill_color, rect, border_radius=5)
             surface.blit(
                 font.render(
-                    f"{self.button_labels[unit_class]} ({unit_class.COST if unit_class else ''})",
-                    True,
-                    (255, 255, 255),
+                    f"{self.sell_button_labels[unit_class]} ({unit_class.COST})",
+                    color=pg.Color("white"),
+                    antialias=True,
                 ),
                 (rect.x + 10, rect.y + 10),
             )
+
+        sell_fill_color = (
+            self.ACTION_ALLOWED_COLOR
+            if selected_building
+            else self.ACTION_BLOCKED_COLOR
+        )
+        pg.draw.rect(surface, sell_fill_color, self.sell_button, border_radius=5)
+        surface.blit(
+            font.render("Sell", color=pg.Color("white"), antialias=True),
+            (self.sell_button.x + 10, self.sell_button.y + 10),
+        )
+
         for i, unit_class in enumerate(self.headquarters.production_queue[:5]):
             surface.blit(
                 font.render(
-                    f"{unit_class.__name__} ({unit_class.COST})", True, (255, 255, 255)
+                    f"{unit_class.__name__} ({unit_class.COST})",
+                    color=pg.Color("white"),
+                    antialias=True,
                 ),
                 (self._CONTENT_POS_X, 350 + i * 25),
             )
@@ -1292,12 +1326,12 @@ class ProductionInterface:
             )
             pg.draw.rect(
                 surface,
-                (0, 255, 0),
+                pg.Color("green"),
                 (self._CONTENT_POS_X, 340, int(self._BUTTON_WIDTH * progress), 10),
             )
             pg.draw.rect(
                 surface,
-                (255, 255, 255),
+                pg.Color("white"),
                 (self._CONTENT_POS_X, 340, self._BUTTON_WIDTH, 10),
                 1,
             )
@@ -1336,36 +1370,35 @@ class ProductionInterface:
                 ),
             )
 
-    def handle_click(self, pos, iron) -> bool:
+    def handle_click(self, pos: tuple[float, float], iron: int) -> bool:
         global selected_building
         for rect, tab_name in self.tab_buttons:
             if rect.collidepoint(pos):
                 self.current_tab = tab_name
                 return True
 
-        if len(self.headquarters.production_queue) >= 5:
+        if len(self.headquarters.production_queue) >= self.MAX_PRODUCTION_QUEUE_LENGTH:
             return False
 
-        for rect, unit_class, req_fn in self.action_buttons[self.current_tab]:
-            if rect.collidepoint(pos):
-                if (
-                    unit_class is None
-                    and selected_building
-                    and selected_building.team == self.headquarters.team
-                ):
-                    self.headquarters.iron += selected_building.COST // 2
-                    selected_building.kill()
-                    selected_building = None
-                    return True
+        for rect, unit_class, req_fn in self.buy_buttons[self.current_tab]:
+            if rect.collidepoint(pos) and iron >= unit_class.COST and req_fn():
+                self.headquarters.production_queue.append(unit_class)
+                self.headquarters.iron -= unit_class.COST
+                if not self.headquarters.production_timer:
+                    self.production_timer = self.headquarters.get_production_time(
+                        unit_class
+                    )
+                return True
 
-                if unit_class and iron >= unit_class.COST and req_fn():
-                    self.headquarters.production_queue.append(unit_class)
-                    self.headquarters.iron -= unit_class.COST
-                    if not self.headquarters.production_timer:
-                        self.production_timer = self.headquarters.get_production_time(
-                            unit_class
-                        )
-                    return True
+        if (
+            self.sell_button.collidepoint(pos)
+            and selected_building
+            and selected_building.team == self.headquarters.team
+        ):
+            self.headquarters.iron += selected_building.COST // 2
+            selected_building.kill()
+            selected_building = None
+            return True
 
         return False
 
