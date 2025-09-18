@@ -1116,10 +1116,20 @@ class ProductionInterface:
 
     WIDTH: ClassVar = 200
     MARGIN_X: ClassVar = 20
+    """Margin on left and right."""
+    IRON_POS_Y: ClassVar = 20
+    """y position of iron value."""
+    POWER_POS_Y: ClassVar = 45
+    """y position of power value."""
+    TAB_BUTTONS_POS_Y: ClassVar = 70
+    """y position of first tab button."""
+    ACTION_BUTTONS_POS_Y: ClassVar = 190
+    """y position of first action button."""
+    SELL_BUTTON_POS_Y: ClassVar = 390
+    """y position of sell button."""
     BUTTON_SPACING_Y: ClassVar = 10
     BUTTON_RADIUS: ClassVar = 5
     TAB_BUTTON_HEIGHT: ClassVar = 30
-    ACTION_BUTTON_Y: ClassVar = 130
     ACTION_BUTTON_HEIGHT: ClassVar = 40
     FILL_COLOR: ClassVar = pg.Color(60, 60, 60)
     LINE_COLOR: ClassVar = pg.Color(100, 100, 100)
@@ -1146,7 +1156,8 @@ class ProductionInterface:
             tab_name: pg.Rect(
                 (
                     self.MARGIN_X,
-                    10 + i * (self.TAB_BUTTON_HEIGHT + self.BUTTON_SPACING_Y),
+                    self.TAB_BUTTONS_POS_Y
+                    + i * (self.TAB_BUTTON_HEIGHT + self.BUTTON_SPACING_Y),
                 ),
                 (self._BUTTON_WIDTH, self.TAB_BUTTON_HEIGHT),
             )
@@ -1158,7 +1169,7 @@ class ProductionInterface:
                     pg.Rect(
                         (
                             self.MARGIN_X,
-                            self.ACTION_BUTTON_Y
+                            self.ACTION_BUTTONS_POS_Y
                             + i * (self.ACTION_BUTTON_HEIGHT + self.BUTTON_SPACING_Y),
                         ),
                         (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
@@ -1202,7 +1213,7 @@ class ProductionInterface:
                     pg.Rect(
                         (
                             self.MARGIN_X,
-                            self.ACTION_BUTTON_Y
+                            self.ACTION_BUTTONS_POS_Y
                             + i * (self.ACTION_BUTTON_HEIGHT + self.BUTTON_SPACING_Y),
                         ),
                         (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
@@ -1216,7 +1227,7 @@ class ProductionInterface:
             "Defensive": {
                 Turret: (
                     pg.Rect(
-                        (self.MARGIN_X, self.ACTION_BUTTON_Y),
+                        (self.MARGIN_X, self.ACTION_BUTTONS_POS_Y),
                         (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
                     ),
                     lambda: True,
@@ -1224,7 +1235,7 @@ class ProductionInterface:
             },
         }
         self.sell_button = pg.Rect(
-            (self.MARGIN_X, 330),
+            (self.MARGIN_X, self.SELL_BUTTON_POS_Y),
             (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
         )
 
@@ -1243,10 +1254,17 @@ class ProductionInterface:
         """Convert screen position to local position."""
         return screen_pos[0] - SCREEN_WIDTH + self.WIDTH, screen_pos[1]
 
-    def draw(self, surface_: pg.Surface) -> None:
-        """Draw to the `surface_`."""
-        self.surface.fill(self.FILL_COLOR)
-        pg.draw.rect(self.surface, self.LINE_COLOR, self.surface.get_rect(), width=2)
+    def _draw_iron(self):
+        self.surface.blit(
+            font.render(
+                f"Iron: {self.headquarters.iron}",
+                color=pg.Color("white"),
+                antialias=True,
+            ),
+            (self.MARGIN_X, self.IRON_POS_Y),
+        )
+
+    def _draw_power(self):
         self.surface.blit(
             font.render(
                 f"Power: {self.headquarters.power_output}"
@@ -1258,43 +1276,43 @@ class ProductionInterface:
                 ),
                 antialias=True,
             ),
-            (self.MARGIN_X, self.BUTTON_SPACING_Y),
+            (self.MARGIN_X, self.POWER_POS_Y),
         )
-        for tab_name, rect in self.tab_buttons.items():
-            pg.draw.rect(
-                self.surface,
-                self.ACTIVE_TAB_COLOR
-                if tab_name == self.current_tab
-                else self.INACTIVE_TAB_COLOR,
-                rect,
-                border_radius=self.BUTTON_RADIUS,
-            )
-            self.surface.blit(
-                font.render(tab_name, color=pg.Color("white"), antialias=True),
-                (rect.x + 10, rect.y + 10),
-            )
 
-        for unit_class, info in self.buy_buttons[self.current_tab].items():
-            rect, req_fn = info
-            cost = unit_class.COST
-            can_produce = self.headquarters.iron >= cost and req_fn()
-            buy_fill_color = (
-                self.ACTION_ALLOWED_COLOR
-                if (unit_class and can_produce)
-                else self.ACTION_BLOCKED_COLOR
-            )
-            pg.draw.rect(
-                self.surface, buy_fill_color, rect, border_radius=self.BUTTON_RADIUS
-            )
-            self.surface.blit(
-                font.render(
-                    f"{self.sell_button_labels[unit_class]} ({unit_class.COST})",
-                    color=pg.Color("white"),
-                    antialias=True,
-                ),
-                (rect.x + 10, rect.y + 10),
-            )
+    def _draw_tab_button(self, *, rect: pg.Rect, label: str) -> None:
+        pg.draw.rect(
+            self.surface,
+            self.ACTIVE_TAB_COLOR
+            if label == self.current_tab
+            else self.INACTIVE_TAB_COLOR,
+            rect,
+            border_radius=self.BUTTON_RADIUS,
+        )
+        self.surface.blit(
+            font.render(label, color=pg.Color("white"), antialias=True),
+            (rect.x + 10, rect.y + 10),
+        )
 
+    def _draw_buy_button(
+        self, *, rect: pg.Rect, unit_cls: type[GameObject], req_fn: Callable
+    ) -> None:
+        can_produce = self.headquarters.iron >= unit_cls.COST and req_fn
+        buy_fill_color = (
+            self.ACTION_ALLOWED_COLOR if can_produce else self.ACTION_BLOCKED_COLOR
+        )
+        pg.draw.rect(
+            self.surface, buy_fill_color, rect, border_radius=self.BUTTON_RADIUS
+        )
+        self.surface.blit(
+            font.render(
+                f"{self.sell_button_labels[unit_cls]} ({unit_cls.COST})",
+                color=pg.Color("white"),
+                antialias=True,
+            ),
+            (rect.x + 10, rect.y + 10),
+        )
+
+    def _draw_sell_button(self, *, rect: pg.Rect) -> None:
         sell_fill_color = (
             self.ACTION_ALLOWED_COLOR
             if selected_building
@@ -1303,7 +1321,7 @@ class ProductionInterface:
         pg.draw.rect(
             self.surface,
             sell_fill_color,
-            self.sell_button,
+            rect,
             border_radius=self.BUTTON_RADIUS,
         )
         self.surface.blit(
@@ -1311,6 +1329,23 @@ class ProductionInterface:
             (self.sell_button.x + 10, self.sell_button.y + 10),
         )
 
+    def draw(self, surface_: pg.Surface) -> None:
+        """Draw to the `surface_`."""
+        self.surface.fill(self.FILL_COLOR)
+        pg.draw.rect(self.surface, self.LINE_COLOR, self.surface.get_rect(), width=2)
+        self._draw_iron()
+        self._draw_power()
+
+        for tab_name, rect in self.tab_buttons.items():
+            self._draw_tab_button(rect=rect, label=tab_name)
+
+        for unit_cls, info in self.buy_buttons[self.current_tab].items():
+            rect, req_fn = info
+            self._draw_buy_button(rect=rect, unit_cls=unit_cls, req_fn=req_fn)
+
+        self._draw_sell_button(rect=self.sell_button)
+
+        # Production queue:
         for i, unit_class in enumerate(self.headquarters.production_queue[:5]):
             self.surface.blit(
                 font.render(
@@ -1342,6 +1377,7 @@ class ProductionInterface:
                 1,
             )
 
+        # Pending building icon:
         if self.headquarters.pending_building:
             mouse_pos = pg.mouse.get_pos()
             world_pos = snap_to_grid(*camera.screen_to_world(mouse_pos))
@@ -1375,6 +1411,7 @@ class ProductionInterface:
                     mouse_pos[1] - building_size[1] // 2,
                 ),
             )
+
         surface_.blit(source=self.surface, dest=(SCREEN_WIDTH - self.WIDTH, 0))
 
     def handle_click(self, screen_pos: tuple[int, int]) -> bool:
@@ -2272,16 +2309,14 @@ if __name__ == "__main__":
                 particle.draw(screen, camera)
 
         interface.draw(screen)
-        screen.blit(
-            font.render(f"Iron: {gdi_headquarters.iron}", True, (255, 255, 255)),
-            (10, 10),
-        )
         if selecting and select_rect:
             pg.draw.rect(screen, (255, 255, 255), select_rect, 2)
+
         console.draw(screen)
         for obj in all_units:
             if hasattr(obj, "under_attack") and obj.under_attack:
                 obj.under_attack = False
+
         pg.display.flip()
         clock.tick(60)
 
