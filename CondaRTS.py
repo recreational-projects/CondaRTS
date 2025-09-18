@@ -12,6 +12,7 @@ import pygame as pg
 
 from src.constants import MAP_HEIGHT, MAP_WIDTH
 from src.game_object import GameObject
+from src.shapes import draw_progress_bar
 
 SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
 TILE_SIZE = 32
@@ -485,6 +486,7 @@ class Tank(GameObject):
                 self.rect.width // 2 + 2,
                 2,
             )  # Circular selection
+
         self.draw_health_bar(screen, camera)
 
 
@@ -1118,13 +1120,15 @@ class ProductionInterface:
     IRON_POS_Y: ClassVar = 20
     """y position of iron value."""
     POWER_POS_Y: ClassVar = 45
-    """y position of power value."""
+    """... power value."""
     TAB_BUTTONS_POS_Y: ClassVar = 70
-    """y position of first tab button."""
-    ACTION_BUTTONS_POS_Y: ClassVar = 190
-    """y position of first action button."""
+    """... first tab button."""
+    BUY_BUTTONS_POS_Y: ClassVar = 190
+    """... first buy button."""
     SELL_BUTTON_POS_Y: ClassVar = 390
-    """y position of sell button."""
+    """... sell button."""
+    PRODUCTION_QUEUE_POS_Y: ClassVar = 460
+    """... production queue."""
     BUTTON_SPACING_Y: ClassVar = 10
     BUTTON_RADIUS: ClassVar = 5
     TAB_BUTTON_HEIGHT: ClassVar = 30
@@ -1167,7 +1171,7 @@ class ProductionInterface:
                     pg.Rect(
                         (
                             self.MARGIN_X,
-                            self.ACTION_BUTTONS_POS_Y
+                            self.BUY_BUTTONS_POS_Y
                             + i * (self.ACTION_BUTTON_HEIGHT + self.BUTTON_SPACING_Y),
                         ),
                         (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
@@ -1211,7 +1215,7 @@ class ProductionInterface:
                     pg.Rect(
                         (
                             self.MARGIN_X,
-                            self.ACTION_BUTTONS_POS_Y
+                            self.BUY_BUTTONS_POS_Y
                             + i * (self.ACTION_BUTTON_HEIGHT + self.BUTTON_SPACING_Y),
                         ),
                         (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
@@ -1225,7 +1229,7 @@ class ProductionInterface:
             "Defensive": {
                 Turret: (
                     pg.Rect(
-                        (self.MARGIN_X, self.ACTION_BUTTONS_POS_Y),
+                        (self.MARGIN_X, self.BUY_BUTTONS_POS_Y),
                         (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
                     ),
                     lambda: True,
@@ -1252,17 +1256,17 @@ class ProductionInterface:
         """Convert screen position to local position."""
         return screen_pos[0] - SCREEN_WIDTH + self.WIDTH, screen_pos[1]
 
-    def _draw_iron(self):
+    def _draw_iron(self, *, y_pos: int) -> None:
         self.surface.blit(
             font.render(
                 f"Iron: {self.headquarters.iron}",
                 color=pg.Color("white"),
                 antialias=True,
             ),
-            (self.MARGIN_X, self.IRON_POS_Y),
+            (self.MARGIN_X, y_pos),
         )
 
-    def _draw_power(self):
+    def _draw_power(self, *, y_pos: int) -> None:
         self.surface.blit(
             font.render(
                 f"Power: {self.headquarters.power_output}"
@@ -1274,7 +1278,7 @@ class ProductionInterface:
                 ),
                 antialias=True,
             ),
-            (self.MARGIN_X, self.POWER_POS_Y),
+            (self.MARGIN_X, y_pos),
         )
 
     def _draw_tab_button(self, *, rect: pg.Rect, label: str) -> None:
@@ -1327,32 +1331,7 @@ class ProductionInterface:
             (self.sell_button.x + 10, self.sell_button.y + 10),
         )
 
-    def draw(self, surface_: pg.Surface) -> None:
-        """Draw to the `surface_`."""
-        self.surface.fill(self.FILL_COLOR)
-        pg.draw.rect(self.surface, self.LINE_COLOR, self.surface.get_rect(), width=2)
-        self._draw_iron()
-        self._draw_power()
-
-        for tab_name, rect in self.tab_buttons.items():
-            self._draw_tab_button(rect=rect, label=tab_name)
-
-        for unit_cls, info in self.buy_buttons[self.current_tab].items():
-            rect, req_fn = info
-            self._draw_buy_button(rect=rect, unit_cls=unit_cls, req_fn=req_fn)
-
-        self._draw_sell_button(rect=self.sell_button)
-
-        # Production queue:
-        for i, unit_class in enumerate(self.headquarters.production_queue[:5]):
-            self.surface.blit(
-                font.render(
-                    f"{unit_class.__name__} ({unit_class.COST})",
-                    color=pg.Color("white"),
-                    antialias=True,
-                ),
-                (self.MARGIN_X, 350 + i * 25),
-            )
+    def _draw_production_queue(self, y_pos: int) -> None:
         if self.headquarters.production_timer > 0:
             progress = (
                 1
@@ -1363,17 +1342,42 @@ class ProductionInterface:
                     else Headquarters
                 )
             )
-            pg.draw.rect(
-                self.surface,
-                pg.Color("green"),
-                (self.MARGIN_X, 340, int(self._BUTTON_WIDTH * progress), 10),
+            draw_progress_bar(
+                surface=self.surface,
+                bar_color=pg.Color("green"),
+                rect=pg.Rect(
+                    (self.MARGIN_X, y_pos),
+                    (self._BUTTON_WIDTH, 10),
+                ),
+                progress=progress,
             )
-            pg.draw.rect(
-                self.surface,
-                pg.Color("white"),
-                (self.MARGIN_X, 340, self._BUTTON_WIDTH, 10),
-                1,
+
+        for i, unit_class in enumerate(self.headquarters.production_queue[:5]):
+            self.surface.blit(
+                font.render(
+                    f"{unit_class.__name__} ({unit_class.COST})",
+                    color=pg.Color("white"),
+                    antialias=True,
+                ),
+                (self.MARGIN_X, (y_pos + 20) + i * 25),
             )
+
+    def draw(self, surface_: pg.Surface) -> None:
+        """Draw to the `surface_`."""
+        self.surface.fill(self.FILL_COLOR)
+        pg.draw.rect(self.surface, self.LINE_COLOR, self.surface.get_rect(), width=2)
+        self._draw_iron(y_pos=self.IRON_POS_Y)
+        self._draw_power(y_pos=self.POWER_POS_Y)
+
+        for tab_name, rect in self.tab_buttons.items():
+            self._draw_tab_button(rect=rect, label=tab_name)
+
+        for unit_cls, info in self.buy_buttons[self.current_tab].items():
+            rect, req_fn = info
+            self._draw_buy_button(rect=rect, unit_cls=unit_cls, req_fn=req_fn)
+
+        self._draw_production_queue(y_pos=self.PRODUCTION_QUEUE_POS_Y)
+        self._draw_sell_button(rect=self.sell_button)
 
         # Pending building icon:
         if self.headquarters.pending_building:
