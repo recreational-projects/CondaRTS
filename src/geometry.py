@@ -7,12 +7,12 @@ import pygame as pg
 from src.constants import BUILDING_CONSTRUCTION_RANGE, TILE_SIZE
 
 if TYPE_CHECKING:
-    from CondaRTS import Building
+    from CondaRTS import Building, Team
+
+type Coordinate = tuple[float, float]
 
 
-def _is_within_building_range(
-    *, position: tuple[float, float], team, buildings
-) -> bool:
+def _is_within_building_range(*, position: Coordinate, team: Team, buildings) -> bool:
     """Return whether `position` is within construction range of team's building."""
     x, y = position
     return any(
@@ -28,7 +28,7 @@ def _is_within_building_range(
 
 def _collides_with_building(
     *,
-    position: tuple[float, float],
+    position: Coordinate,
     new_building_cls: type[Building],
     buildings,
 ) -> bool:
@@ -42,9 +42,9 @@ def _collides_with_building(
 
 def is_valid_building_position(
     *,
-    position: tuple[float, float],
+    position: Coordinate,
     new_building_cls: type[Building],
-    team,
+    team: Team,
     buildings,
 ) -> bool:
     return _is_within_building_range(
@@ -58,6 +58,6 @@ def is_valid_building_position(
     )
 
 
-def snap_to_grid(position: tuple[float, float]) -> tuple[float, float]:
+def snap_to_grid(position: Coordinate) -> Coordinate:
     """Return minimum (top left) point of tile containing `position`."""
     return position[0] // TILE_SIZE * TILE_SIZE, position[1] // TILE_SIZE * TILE_SIZE
