@@ -17,7 +17,6 @@ SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
 TILE_SIZE = 32
 BUILDING_RANGE = 160
 BASE_PRODUCTION_TIME = 180
-POWER_PER_PLANT = 100
 GDI_COLOR = (200, 150, 0)  # Brighter yellow for GDI
 NOD_COLOR = (200, 0, 0)  # Brighter red for NOD
 VALID_PLACEMENT_COLOR = (0, 255, 0)
@@ -410,6 +409,7 @@ class FogOfWar:
 
 class Tank(GameObject):
     COST = 500
+    POWER_USAGE = 15
 
     def __init__(self, x, y, team) -> None:
         super().__init__(x, y, team)
@@ -433,7 +433,6 @@ class Tank(GameObject):
         self.attack_cooldown = 50
         self.angle: float = 0
         self.recoil = 0
-        self.power_usage = 15
 
     def update(self) -> None:
         super().update()
@@ -491,6 +490,7 @@ class Tank(GameObject):
 
 class Infantry(GameObject):
     COST = 100
+    POWER_USAGE = 5
 
     def __init__(self, x, y, team) -> None:
         super().__init__(x, y, team)
@@ -507,7 +507,6 @@ class Infantry(GameObject):
         self.attack_range = 50
         self.attack_damage = 8
         self.attack_cooldown = 25
-        self.power_usage = 5
 
     def update(self) -> None:
         super().update()
@@ -538,6 +537,7 @@ class Infantry(GameObject):
 
 class Harvester(GameObject):
     COST = 800
+    POWER_USAGE = 20
 
     def __init__(self, x, y, team, headquarters) -> None:
         super().__init__(x, y, team)
@@ -557,7 +557,6 @@ class Harvester(GameObject):
         self.state = "moving_to_field"
         self.target_field: IronField | None = None
         self.harvest_time = 40
-        self.power_usage = 20
         self.attack_range = 50
         self.attack_damage = 10
         self.attack_cooldown = 30
@@ -660,7 +659,7 @@ class Harvester(GameObject):
 
 
 class Building(GameObject):
-    def __init__(self, x, y, team, size, color, health, power_usage) -> None:
+    def __init__(self, x, y, team, size, color, health) -> None:
         super().__init__(x, y, team)
         self.image = pg.Surface(size, pg.SRCALPHA)
         # Add details to building
@@ -679,7 +678,6 @@ class Building(GameObject):
         self.rect = self.image.get_rect(topleft=(x, y))
         self.health = health
         self.max_health = health
-        self.power_usage = power_usage
         self.construction_progress = 0
         self.construction_time = 50
         self.is_seen = False
@@ -722,7 +720,6 @@ class Headquarters(Building):
             (80, 80),
             GDI_COLOR if team == Team.GDI.value else NOD_COLOR,
             1200,
-            0,
         )
         self.iron = 1500
         self.production_queue: list = []
@@ -730,9 +727,19 @@ class Headquarters(Building):
         self.base_power = 300
         self.pending_building = None
         self.pending_building_pos = None
-        self.has_enough_power = True
-        self.power_output = 0
         self.power_usage = 0
+
+    @property
+    def power_output(self) -> int:
+        return self.base_power + sum(
+            b.POWER_OUTPUT
+            for b in buildings
+            if b.team == self.team and isinstance(b, PowerPlant) and b.health > 0
+        )
+
+    @property
+    def has_enough_power(self) -> bool:
+        return self.power_output >= self.power_usage
 
     def get_production_time(self, unit_class):
         base_time = BASE_PRODUCTION_TIME
@@ -760,27 +767,17 @@ class Headquarters(Building):
 
     def update(self) -> None:
         self.power_usage = sum(
-            unit.power_usage for unit in all_units if unit.team == self.team
-        ) + sum(
-            building.power_usage for building in buildings if building.team == self.team
-        )
-        self.power_output = self.base_power + sum(
-            POWER_PER_PLANT
-            for b in buildings
-            if b.team == self.team and isinstance(b, PowerPlant) and b.health > 0
-        )
-        self.has_enough_power = self.power_output >= self.power_usage
+            u.POWER_USAGE for u in all_units if u.team == self.team
+        ) + sum(b.POWER_USAGE for b in buildings if b.team == self.team and b != self)
         if (
             self.production_queue
             and not self.production_timer
             and self.has_enough_power
         ):
             self.production_timer = self.get_production_time(self.production_queue[0])
+
         if self.production_queue:
-            if self.has_enough_power:
-                self.production_timer -= 1
-            else:
-                self.production_timer -= 0.5
+            self.production_timer -= 1 if self.has_enough_power else 0.5
             if self.production_timer <= 0:
                 unit_class = self.production_queue.pop(0)
                 if unit_class in [
@@ -874,6 +871,7 @@ class Headquarters(Building):
 
 class Barracks(Building):
     COST = 500
+    POWER_USAGE = 25
 
     def __init__(self, x, y, team) -> None:
         super().__init__(
@@ -883,12 +881,12 @@ class Barracks(Building):
             (60, 60),
             (150, 150, 0) if team == Team.GDI.value else (150, 0, 0),
             600,
-            25,
         )
 
 
 class WarFactory(Building):
     COST = 1000
+    POWER_USAGE = 35
 
     def __init__(self, x, y, team) -> None:
         super().__init__(
@@ -898,12 +896,13 @@ class WarFactory(Building):
             (60, 60),
             (170, 170, 0) if team == Team.GDI.value else (170, 0, 0),
             800,
-            35,
         )
 
 
 class PowerPlant(Building):
     COST = 300
+    POWER_OUTPUT = 100
+    POWER_USAGE = 0
 
     def __init__(self, x, y, team) -> None:
         super().__init__(
@@ -913,12 +912,12 @@ class PowerPlant(Building):
             (60, 60),
             (130, 130, 0) if team == Team.GDI.value else (130, 0, 0),
             500,
-            0,
         )
 
 
 class Turret(Building):
     COST = 600
+    POWER_USAGE = 25
 
     def __init__(self, x, y, team) -> None:
         super().__init__(
@@ -928,7 +927,6 @@ class Turret(Building):
             (50, 50),
             (180, 180, 0) if team == Team.GDI.value else (180, 0, 0),
             500,
-            25,
         )
         self.attack_range = 180
         self.attack_damage = 15
@@ -1782,7 +1780,7 @@ class AI:
             )
             return
         elif (
-            self.headquarters.power_usage > self.headquarters.power_output
+            self.headquarters.has_enough_power
             and iron >= PowerPlant.COST
             and current_units["PowerPlant"] < target_units["PowerPlant"]
         ):
