@@ -2,26 +2,25 @@ from __future__ import annotations
 
 import math
 import random
-from collections.abc import Callable
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from enum import Enum
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import pygame as pg
 
-from src.constants import MAP_HEIGHT, MAP_WIDTH
+from src.constants import MAP_HEIGHT, MAP_WIDTH, TILE_SIZE
 from src.game_object import GameObject
+from src.geometry import is_valid_building_position, snap_to_grid
 from src.shapes import draw_progress_bar
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
-TILE_SIZE = 32
-BUILDING_RANGE = 160
 BASE_PRODUCTION_TIME = 180
 GDI_COLOR = (200, 150, 0)  # Brighter yellow for GDI
 NOD_COLOR = (200, 0, 0)  # Brighter red for NOD
-VALID_PLACEMENT_COLOR = (0, 255, 0)
-INVALID_PLACEMENT_COLOR = (255, 0, 0)
 CONSOLE_HEIGHT = 200
 
 
@@ -48,39 +47,7 @@ def calculate_formation_positions(center, target, num_units, direction=None):
     return positions
 
 
-def snap_to_grid(x, y):
-    return (x // TILE_SIZE) * TILE_SIZE, (y // TILE_SIZE) * TILE_SIZE
-
-
-def is_valid_building_position(x, y, team):
-    for building in buildings:
-        if building.team == team and building.health > 0:
-            if (
-                math.sqrt(
-                    (x - building.rect.centerx) ** 2 + (y - building.rect.centery) ** 2
-                )
-                <= BUILDING_RANGE
-            ):
-                return True
-    return False
-
-
-def collides_with_building(x, y, building_class):
-    building_size = (
-        (80, 80)
-        if building_class == Headquarters
-        else (50, 50)
-        if building_class == Turret
-        else (60, 60)
-    )
-    new_rect = pg.Rect(x, y, building_size[0], building_size[1])
-    for building in buildings:
-        if building.health > 0 and new_rect.colliderect(building.rect):
-            return True
-    return False
-
-
-def handle_collisions(units):
+def handle_collisions(units) -> None:
     for unit in units:
         for other in units:
             if unit != other and unit.rect.colliderect(other.rect):
@@ -661,11 +628,13 @@ class Harvester(GameObject):
 
 
 class Building(GameObject):
-    def __init__(self, x, y, team, size, color, health) -> None:
+    SIZE = 60, 60
+
+    def __init__(self, x, y, team, color, health) -> None:
         super().__init__(x, y, team)
-        self.image = pg.Surface(size, pg.SRCALPHA)
+        self.image = pg.Surface(self.SIZE, pg.SRCALPHA)
         # Add details to building
-        pg.draw.rect(self.image, color, (0, 0, size[0], size[1]))  # Base
+        pg.draw.rect(self.image, color, ((0, 0), self.SIZE))  # Base
         # Clamp color values to prevent negative values
         inner_color = (
             max(0, color[0] - 50),
@@ -673,10 +642,11 @@ class Building(GameObject):
             max(0, color[2] - 50),
         )
         pg.draw.rect(
-            self.image, inner_color, (5, 5, size[0] - 10, size[1] - 10)
+            self.image, inner_color, ((5, 5), (self.SIZE[0] - 10, self.SIZE[1] - 10))
         )  # Inner
-        for i in range(10, size[0] - 10, 20):
+        for i in range(10, self.SIZE[0] - 10, 20):
             pg.draw.rect(self.image, (200, 200, 200), (i, 10, 10, 10))  # Windows
+
         self.rect = self.image.get_rect(topleft=(x, y))
         self.health = health
         self.max_health = health
@@ -713,13 +683,13 @@ class Building(GameObject):
 
 class Headquarters(Building):
     COST = 2000
+    SIZE = 80, 80
 
     def __init__(self, x, y, team) -> None:
         super().__init__(
             x,
             y,
             team,
-            (80, 80),
             GDI_COLOR if team == Team.GDI.value else NOD_COLOR,
             1200,
         )
@@ -854,9 +824,12 @@ class Headquarters(Building):
         super().update()
 
     def place_building(self, x, y, unit_class):
-        x, y = snap_to_grid(x, y)
-        if is_valid_building_position(x, y, self.team) and not collides_with_building(
-            x, y, unit_class
+        snapped_position = snap_to_grid((x, y))
+        if is_valid_building_position(
+            position=snapped_position,
+            team=self.team,
+            new_building_cls=unit_class,
+            buildings=buildings,
         ):
             buildings.add(unit_class(x, y, self.team))
             self.pending_building = None
@@ -880,7 +853,6 @@ class Barracks(Building):
             x,
             y,
             team,
-            (60, 60),
             (150, 150, 0) if team == Team.GDI.value else (150, 0, 0),
             600,
         )
@@ -895,7 +867,6 @@ class WarFactory(Building):
             x,
             y,
             team,
-            (60, 60),
             (170, 170, 0) if team == Team.GDI.value else (170, 0, 0),
             800,
         )
@@ -911,7 +882,6 @@ class PowerPlant(Building):
             x,
             y,
             team,
-            (60, 60),
             (130, 130, 0) if team == Team.GDI.value else (130, 0, 0),
             500,
         )
@@ -920,13 +890,13 @@ class PowerPlant(Building):
 class Turret(Building):
     COST = 600
     POWER_USAGE = 25
+    SIZE = 50, 50
 
     def __init__(self, x, y, team) -> None:
         super().__init__(
             x,
             y,
             team,
-            (50, 50),
             (180, 180, 0) if team == Team.GDI.value else (180, 0, 0),
             500,
         )
@@ -1140,108 +1110,88 @@ class ProductionInterface:
     ACTION_ALLOWED_COLOR: ClassVar = pg.Color(0, 200, 0)
     ACTION_BLOCKED_COLOR: ClassVar = pg.Color(200, 0, 0)
     MAX_PRODUCTION_QUEUE_LENGTH: ClassVar = 5
+    PLACEMENT_VALID_COLOR = (0, 255, 0)
+    PLACEMENT_INVALID_COLOR = (255, 0, 0)
 
     _BUTTON_WIDTH = WIDTH - 2 * MARGIN_X
 
     headquarters: Headquarters
     surface: pg.Surface = dataclass_field(init=False)
     tab_buttons: dict[str, pg.Rect] = dataclass_field(default_factory=dict)
-    buy_buttons: dict[str, dict[type[GameObject], tuple[pg.Rect, Callable]]] = (
-        dataclass_field(default_factory=dict)
-    )
+    buy_buttons: dict[
+        str,
+        dict[type[GameObject], tuple[pg.Rect, Callable]],
+    ] = dataclass_field(default_factory=dict)
     sell_button: pg.Rect = dataclass_field(init=False)
     current_tab = "Units"
+    production_timer: float | None = None
 
     def __post_init__(self) -> None:
         self.surface = pg.Surface((self.WIDTH, SCREEN_HEIGHT - CONSOLE_HEIGHT))
-        self.tab_buttons = {
-            tab_name: pg.Rect(
-                (
-                    self.MARGIN_X,
-                    self.TAB_BUTTONS_POS_Y
-                    + i * (self.TAB_BUTTON_HEIGHT + self.BUTTON_SPACING_Y),
-                ),
-                (self._BUTTON_WIDTH, self.TAB_BUTTON_HEIGHT),
+
+        tab_button_base = pg.Rect(
+            (self.MARGIN_X, self.TAB_BUTTONS_POS_Y),
+            (self._BUTTON_WIDTH, self.TAB_BUTTON_HEIGHT),
+        )
+        for i, tab_name in enumerate(["Units", "Buildings", "Defensive"]):
+            self.tab_buttons[tab_name] = tab_button_base.move(
+                0, i * (self.TAB_BUTTON_HEIGHT + self.BUTTON_SPACING_Y)
             )
-            for i, tab_name in enumerate(["Units", "Buildings", "Defensive"])
-        }
-        self.buy_buttons = {
-            "Units": {
-                cls: (
-                    pg.Rect(
-                        (
-                            self.MARGIN_X,
-                            self.BUY_BUTTONS_POS_Y
-                            + i * (self.ACTION_BUTTON_HEIGHT + self.BUTTON_SPACING_Y),
-                        ),
-                        (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
-                    ),
-                    lambda: req,
-                )
-                for i, (cls, req) in enumerate(
-                    [
-                        (
-                            Tank,
-                            lambda: any(
-                                b.team == self.headquarters.team
-                                and isinstance(b, WarFactory)
-                                and b.health > 0
-                                for b in buildings
-                            ),
-                        ),
-                        (
-                            Infantry,
-                            lambda: any(
-                                b.team == self.headquarters.team
-                                and isinstance(b, Barracks)
-                                and b.health > 0
-                                for b in buildings
-                            ),
-                        ),
-                        (
-                            Harvester,
-                            lambda: any(
-                                b.team == self.headquarters.team
-                                and isinstance(b, WarFactory)
-                                and b.health > 0
-                                for b in buildings
-                            ),
-                        ),
-                    ]
-                )
-            },
-            "Buildings": {
-                cls: (
-                    pg.Rect(
-                        (
-                            self.MARGIN_X,
-                            self.BUY_BUTTONS_POS_Y
-                            + i * (self.ACTION_BUTTON_HEIGHT + self.BUTTON_SPACING_Y),
-                        ),
-                        (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
-                    ),
-                    lambda: True,
-                )
-                for i, cls in enumerate(
-                    [Barracks, WarFactory, PowerPlant, Headquarters]
-                )
-            },
-            "Defensive": {
-                Turret: (
-                    pg.Rect(
-                        (self.MARGIN_X, self.BUY_BUTTONS_POS_Y),
-                        (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
-                    ),
-                    lambda: True,
-                ),
-            },
-        }
-        self.sell_button = pg.Rect(
-            (self.MARGIN_X, self.SELL_BUTTON_POS_Y),
+            self.buy_buttons[tab_name] = {}
+
+        action_button_base = pg.Rect(
+            (self.MARGIN_X, 0),
             (self._BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT),
         )
+        buy_button_base = action_button_base.move(0, self.BUY_BUTTONS_POS_Y)
+        for i, (cls, req) in enumerate(
+            [
+                (
+                    Tank,
+                    lambda: any(
+                        b.team == self.headquarters.team
+                        and isinstance(b, WarFactory)
+                        and b.health > 0
+                        for b in buildings
+                    ),
+                ),
+                (
+                    Infantry,
+                    lambda: any(
+                        b.team == self.headquarters.team
+                        and isinstance(b, Barracks)
+                        and b.health > 0
+                        for b in buildings
+                    ),
+                ),
+                (
+                    Harvester,
+                    lambda: any(
+                        b.team == self.headquarters.team
+                        and isinstance(b, WarFactory)
+                        and b.health > 0
+                        for b in buildings
+                    ),
+                ),
+            ]
+        ):
+            self.buy_buttons["Units"][cls] = (
+                buy_button_base.move(
+                    0, i * (self.ACTION_BUTTON_HEIGHT + self.BUTTON_SPACING_Y)
+                ),
+                lambda: req,
+            )
 
-        self.sell_button_labels = {
+        for i, cls in enumerate([Barracks, WarFactory, PowerPlant, Headquarters]):
+            self.buy_buttons["Buildings"][cls] = (
+                buy_button_base.move(
+                    0, i * (self.ACTION_BUTTON_HEIGHT + self.BUTTON_SPACING_Y)
+                ),
+                lambda: True,
+            )
+        self.buy_buttons["Defensive"] = {Turret: (buy_button_base, lambda: True)}
+        self.sell_button = action_button_base.move(0, self.SELL_BUTTON_POS_Y)
+        self.unit_button_labels = {
             Tank: "Tank",
             Infantry: "Infantry",
             Harvester: "Harvester",
@@ -1267,15 +1217,14 @@ class ProductionInterface:
         )
 
     def _draw_power(self, *, y_pos: int) -> None:
+        color_ = (
+            pg.Color("green") if self.headquarters.has_enough_power else pg.Color("red")
+        )
         self.surface.blit(
             font.render(
                 f"Power: {self.headquarters.power_output}"
                 f"/{self.headquarters.power_usage}",
-                color=(
-                    pg.Color("green")
-                    if self.headquarters.has_enough_power
-                    else pg.Color("red")
-                ),
+                color=color_,
                 antialias=True,
             ),
             (self.MARGIN_X, y_pos),
@@ -1307,7 +1256,7 @@ class ProductionInterface:
         )
         self.surface.blit(
             font.render(
-                f"{self.sell_button_labels[unit_cls]} ({unit_cls.COST})",
+                f"{self.unit_button_labels[unit_cls]} ({unit_cls.COST})",
                 color=pg.Color("white"),
                 antialias=True,
             ),
@@ -1332,14 +1281,12 @@ class ProductionInterface:
         )
 
     def _draw_production_queue(self, y_pos: int) -> None:
-        if self.headquarters.production_timer > 0:
+        if self.headquarters.production_timer and self.headquarters.production_queue:
             progress = (
                 1
                 - self.headquarters.production_timer
                 / self.headquarters.get_production_time(
                     self.headquarters.production_queue[0]
-                    if self.headquarters.production_queue
-                    else Headquarters
                 )
             )
             draw_progress_bar(
@@ -1362,6 +1309,42 @@ class ProductionInterface:
                 (self.MARGIN_X, (y_pos + 20) + i * 25),
             )
 
+    def _draw_pending_building(
+        self, *, surface_: pg.Surface, mouse_pos: tuple[int, int]
+    ) -> None:
+        if not self.headquarters.pending_building:
+            raise TypeError("No pending building")
+
+        pending_building_cls_ = self.headquarters.pending_building
+        world_pos = snap_to_grid(camera.screen_to_world(mouse_pos))
+        temp_surface = pg.Surface(pending_building_cls_.SIZE, pg.SRCALPHA)
+        temp_surface.fill(
+            GDI_COLOR if self.headquarters.team == Team.GDI.value else NOD_COLOR
+        )
+        temp_surface.set_alpha(100)
+        color_ = self.PLACEMENT_INVALID_COLOR
+        if is_valid_building_position(
+            position=world_pos,
+            team=self.headquarters.team,
+            new_building_cls=pending_building_cls_,
+            buildings=buildings,
+        ):
+            color_ = self.PLACEMENT_VALID_COLOR
+
+        pg.draw.rect(
+            temp_surface,
+            color_,
+            ((0, 0), building.SIZE),
+            width=3,
+        )
+        surface_.blit(
+            temp_surface,
+            (
+                mouse_pos[0] - building.SIZE[0] // 2,
+                mouse_pos[1] - building.SIZE[1] // 2,
+            ),
+        )
+
     def draw(self, surface_: pg.Surface) -> None:
         """Draw to the `surface_`."""
         self.surface.fill(self.FILL_COLOR)
@@ -1379,40 +1362,8 @@ class ProductionInterface:
         self._draw_production_queue(y_pos=self.PRODUCTION_QUEUE_POS_Y)
         self._draw_sell_button(rect=self.sell_button)
 
-        # Pending building icon:
         if self.headquarters.pending_building:
-            mouse_pos = pg.mouse.get_pos()
-            world_pos = snap_to_grid(*camera.screen_to_world(mouse_pos))
-            building_size = (
-                (80, 80)
-                if self.headquarters.pending_building == Headquarters
-                else (50, 50)
-                if self.headquarters.pending_building == Turret
-                else (60, 60)
-            )
-            temp_surface = pg.Surface(building_size, pg.SRCALPHA)
-            temp_surface.fill(
-                GDI_COLOR if self.headquarters.team == Team.GDI.value else NOD_COLOR
-            )
-            temp_surface.set_alpha(100)
-            valid = is_valid_building_position(
-                world_pos[0], world_pos[1], self.headquarters.team
-            ) and not collides_with_building(
-                world_pos[0], world_pos[1], self.headquarters.pending_building
-            )
-            pg.draw.rect(
-                temp_surface,
-                VALID_PLACEMENT_COLOR if valid else INVALID_PLACEMENT_COLOR,
-                (0, 0, building_size[0], building_size[1]),
-                3,
-            )
-            surface_.blit(
-                temp_surface,
-                (
-                    mouse_pos[0] - building_size[0] // 2,
-                    mouse_pos[1] - building_size[1] // 2,
-                ),
-            )
+            self._draw_pending_building(surface_=surface_, mouse_pos=pg.mouse.get_pos())
 
         surface_.blit(source=self.surface, dest=(SCREEN_WIDTH - self.WIDTH, 0))
 
@@ -1427,18 +1378,18 @@ class ProductionInterface:
         if len(self.headquarters.production_queue) >= self.MAX_PRODUCTION_QUEUE_LENGTH:
             return False
 
-        for unit_class, info in self.buy_buttons[self.current_tab].items():
+        for unit_cls, info in self.buy_buttons[self.current_tab].items():
             rect, req_fn = info
             if (
                 rect.collidepoint(local_pos)
-                and self.headquarters.iron >= unit_class.COST
+                and self.headquarters.iron >= unit_cls.COST
                 and req_fn()
             ):
-                self.headquarters.production_queue.append(unit_class)
-                self.headquarters.iron -= unit_class.COST
+                self.headquarters.production_queue.append(unit_cls)
+                self.headquarters.iron -= unit_cls.COST
                 if not self.headquarters.production_timer:
                     self.production_timer = self.headquarters.get_production_time(
-                        unit_class
+                        unit_cls
                     )
                 return True
 
@@ -1691,10 +1642,13 @@ class AI:
                 for angle in range(0, 360, 20):
                     x = building.rect.centerx + math.cos(math.radians(angle)) * 120
                     y = building.rect.centery + math.sin(math.radians(angle)) * 120
-                    x, y = snap_to_grid(x, y)
+                    snapped_position = snap_to_grid((x, y))
                     if is_valid_building_position(
-                        x, y, self.headquarters.team
-                    ) and not collides_with_building(x, y, building_class):
+                        position=snapped_position,
+                        team=self.headquarters.team,
+                        new_building_cls=building_class,
+                        buildings=buildings,
+                    ):
                         if (
                             closest_field
                             and math.sqrt(
@@ -1706,9 +1660,8 @@ class AI:
                             return x, y
                         elif not closest_field:
                             return x, y
-        return snap_to_grid(
-            self.headquarters.rect.centerx, self.headquarters.rect.centery
-        )
+
+        return snap_to_grid(self.headquarters.rect.center)
 
     def produce_units(self, player_info):
         current_units = {
@@ -2128,15 +2081,16 @@ if __name__ == "__main__":
             if event.type == pg.QUIT:
                 running = False
             elif event.type == pg.MOUSEBUTTONDOWN:
+                world_x, world_y = camera.screen_to_world(event.pos)
                 target_x, target_y = event.pos
-                world_x, world_y = camera.screen_to_world((target_x, target_y))
                 if event.button == 1:
                     if gdi_headquarters.pending_building:
-                        world_x, world_y = snap_to_grid(world_x, world_y)
+                        snapped_position = snap_to_grid((world_x, world_y))
                         if is_valid_building_position(
-                            world_x, world_y, gdi_headquarters.team
-                        ) and not collides_with_building(
-                            world_x, world_y, gdi_headquarters.pending_building
+                            position=snapped_position,
+                            team=gdi_headquarters.team,
+                            new_building_cls=gdi_headquarters.pending_building,
+                            buildings=buildings,
                         ):
                             gdi_headquarters.place_building(
                                 world_x, world_y, gdi_headquarters.pending_building

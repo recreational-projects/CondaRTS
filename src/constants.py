@@ -1,3 +1,5 @@
 """Constants used by `src/` modules."""
 
 MAP_WIDTH, MAP_HEIGHT = 1600, 800
+TILE_SIZE = 32
+BUILDING_CONSTRUCTION_RANGE = 160

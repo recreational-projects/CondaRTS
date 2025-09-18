@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 import pygame as pg
 
 from src.constants import MAP_HEIGHT, MAP_WIDTH
 
+if TYPE_CHECKING:
+    from CondaRTS import Camera
+
 
 class GameObject(pg.sprite.Sprite):
     COST = 0
 
-    def __init__(self, x, y, team) -> None:
+    def __init__(self, x: float, y: float, team) -> None:
         super().__init__()
         self.rect: pg.Rect = pg.Rect((x, y), (0, 0))  # Nominal, overridden
         self.image: pg.Surface = pg.Surface((x, y))
@@ -74,7 +78,7 @@ class GameObject(pg.sprite.Sprite):
         if self.cooldown_timer > 0:
             self.cooldown_timer -= 1
 
-    def draw_health_bar(self, screen, camera) -> None:
+    def draw_health_bar(self, screen: pg.Surface, camera: Camera) -> None:
         health_ratio = self.health / self.max_health
         if not self.under_attack and health_ratio == 1.0:
             return
