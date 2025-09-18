@@ -26,7 +26,6 @@ class GameObject(pg.sprite.Sprite):
         self.attack_cooldown = 0
         self.cooldown_timer = 0
         self.selected = False
-        self.power_usage = 0
         self.under_attack = False
 
     def move_toward(self) -> None:
