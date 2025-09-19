@@ -23,6 +23,7 @@ from src.fog_of_war import FogOfWar
 from src.game_console import GameConsole
 from src.game_object import GameObject
 from src.geometry import is_valid_building_position, snap_to_grid
+from src.iron_field import IronField
 from src.particle import Particle
 from src.shapes import draw_progress_bar
 
@@ -243,12 +244,12 @@ def handle_projectiles(projectiles, all_units, buildings) -> None:
             projectile.kill()
 
 
-def draw(surface_: pg.Surface) -> None:
+def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
     surface_.fill(pg.Color("black"))
     surface_.blit(base_map, (-camera.rect.x, -camera.rect.y))
     for field in iron_fields:
         if field.resources > 0 and fog_of_war.is_explored(field.rect.center):
-            field.draw(surface_, camera)
+            field.draw(surface_=surface_, camera=camera, font=font_)
 
     for building in buildings:
         if building.health > 0 and (
@@ -882,33 +883,6 @@ class Projectile(pg.sprite.Sprite):
 
     def draw(self, screen: pg.Surface, camera: Camera) -> None:
         screen.blit(self.image, camera.apply(self.rect).topleft)
-
-
-class IronField(pg.sprite.Sprite):
-    def __init__(self, x: float, y: float, resources: int = 5000) -> None:
-        super().__init__()
-        self.image: pg.Surface = pg.Surface((40, 40), pg.SRCALPHA)
-        pg.draw.polygon(
-            self.image, (0, 200, 0), [(0, 20), (20, 0), (40, 20), (20, 40)]
-        )  # Diamond shape for crystal
-        self.rect: pg.Rect = self.image.get_rect(topleft=(x, y))
-        self.resources = resources
-        self.regen_timer = 500
-
-    def update(self) -> None:
-        if self.regen_timer > 0:
-            self.regen_timer -= 1
-        else:
-            self.resources = min(5000, self.resources + 15)
-            self.regen_timer = 500
-        self.image.set_alpha(int(255 * self.resources / 5000))
-
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
-        screen.blit(
-            font.render(f"{self.resources}", True, (255, 255, 255)),
-            (camera.apply(self.rect).x, camera.apply(self.rect).y - 20),
-        )
 
 
 @dataclass(kw_only=True)
@@ -1986,7 +1960,7 @@ if __name__ == "__main__":
         handle_projectiles(projectiles, all_units, buildings)
         ai.update()
         fog_of_war.update_visibility(player_units, buildings, Team.GDI)
-        draw(screen)
+        draw(surface_=screen, font_=font)
         for obj in all_units:
             if hasattr(obj, "under_attack") and obj.under_attack:
                 obj.under_attack = False
