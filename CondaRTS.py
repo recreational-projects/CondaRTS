@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 import pygame as pg
 
+from src.building import Building
 from src.camera import Camera
 from src.constants import (
     CONSOLE_HEIGHT,
@@ -22,6 +23,7 @@ from src.fog_of_war import FogOfWar
 from src.game_console import GameConsole
 from src.game_object import GameObject
 from src.geometry import is_valid_building_position, snap_to_grid
+from src.particle import Particle
 from src.shapes import draw_progress_bar
 
 if TYPE_CHECKING:
@@ -534,60 +536,6 @@ class Harvester(GameObject):
             )
 
 
-class Building(GameObject):
-    SIZE = 60, 60
-
-    def __init__(self, x: float, y: float, team: Team, color, health: int) -> None:
-        super().__init__(x, y, team)
-        self.image = pg.Surface(self.SIZE, pg.SRCALPHA)
-        # Add details to building
-        pg.draw.rect(self.image, color, ((0, 0), self.SIZE))  # Base
-        # Clamp color values to prevent negative values
-        inner_color = (
-            max(0, color[0] - 50),
-            max(0, color[1] - 50),
-            max(0, color[2] - 50),
-        )
-        pg.draw.rect(
-            self.image, inner_color, ((5, 5), (self.SIZE[0] - 10, self.SIZE[1] - 10))
-        )  # Inner
-        for i in range(10, self.SIZE[0] - 10, 20):
-            pg.draw.rect(self.image, (200, 200, 200), (i, 10, 10, 10))  # Windows
-
-        self.rect = self.image.get_rect(topleft=(x, y))
-        self.health = health
-        self.max_health = health
-        self.construction_progress = 0
-        self.construction_time = 50
-        self.is_seen = False
-
-    def update(self) -> None:
-        if self.construction_progress < self.construction_time:
-            self.construction_progress += 1
-            self.image.set_alpha(
-                int(255 * self.construction_progress / self.construction_time)
-            )
-        super().update()
-        if self.health <= 0:
-            for _ in range(15):
-                particles.add(
-                    Particle(
-                        self.rect.centerx,
-                        self.rect.centery,
-                        random.uniform(-3, 3),
-                        random.uniform(-3, 3),
-                        random.randint(6, 12),
-                        (200, 100, 100),
-                        30,
-                    )
-                )
-            self.kill()
-
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
-        self.draw_health_bar(screen, camera)
-
-
 class Headquarters(Building):
     COST = 2000
     SIZE = 80, 80
@@ -644,7 +592,8 @@ class Headquarters(Building):
             return base_time * (0.9**warfactory_count)
         return base_time
 
-    def update(self) -> None:
+    def update(self, *args, **kwargs) -> None:
+        super().update(*args, **kwargs)
         self.power_usage = sum(
             u.POWER_USAGE for u in all_units if u.team == self.team
         ) + sum(b.POWER_USAGE for b in buildings if b.team == self.team and b != self)
@@ -726,8 +675,6 @@ class Headquarters(Building):
                     if self.production_queue and self.has_enough_power
                     else 0
                 )
-
-        super().update()
 
     def place_building(self, x: float, y: float, unit_class) -> None:
         snapped_position = snap_to_grid((x, y))
@@ -813,8 +760,8 @@ class Turret(Building):
         self.target_unit = None
         self.angle: float = 0
 
-    def update(self) -> None:
-        super().update()
+    def update(self, *args, **kwargs) -> None:
+        super().update(*args, **kwargs)
         if self.cooldown_timer > 0:
             self.cooldown_timer -= 1
         if self.cooldown_timer == 0:
@@ -858,6 +805,7 @@ class Turret(Building):
                     )
             else:
                 self.target_unit = None
+
         self.image = pg.Surface((50, 50), pg.SRCALPHA)
         base = pg.Surface((40, 40), pg.SRCALPHA)
         base.fill((180, 180, 0) if self.team == Team.GDI else (180, 0, 0))
@@ -869,33 +817,6 @@ class Turret(Building):
         self.image.set_alpha(
             int(255 * self.construction_progress / self.construction_time)
         )
-
-
-class Particle(pg.sprite.Sprite):
-    def __init__(
-        self, x: float, y: float, vx: float, vy: float, size: int, color, lifetime: int
-    ) -> None:
-        super().__init__()
-        self.image: pg.Surface = pg.Surface((size, size), pg.SRCALPHA)
-        pg.draw.circle(self.image, color, (size // 2, size // 2), size // 2)
-        self.rect: pg.Rect = self.image.get_rect(center=(x, y))
-        self.vx, self.vy = vx, vy
-        self.lifetime = lifetime
-        self.alpha = 255
-        self.initial_lifetime = lifetime
-
-    def update(self) -> None:
-        self.rect.x += self.vx
-        self.rect.y += self.vy
-        self.lifetime -= 1
-        if self.lifetime <= 0:
-            self.kill()
-        else:
-            self.alpha = int(255 * self.lifetime / self.initial_lifetime)
-            self.image.set_alpha(self.alpha)
-
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
 
 
 class Projectile(pg.sprite.Sprite):
@@ -2056,7 +1977,7 @@ if __name__ == "__main__":
         camera.update(selected_units, pg.mouse.get_pos(), interface.surface.get_rect())
         all_units.update()
         iron_fields.update()
-        buildings.update()
+        buildings.update(particles)
         projectiles.update()
         particles.update()
         handle_collisions(all_units)
