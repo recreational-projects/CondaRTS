@@ -233,6 +233,51 @@ def handle_projectiles(projectiles, all_units, buildings) -> None:
             projectile.kill()
 
 
+def draw(surface_: pg.Surface) -> None:
+    surface_.fill(pg.Color("black"))
+    surface_.blit(base_map, (-camera.rect.x, -camera.rect.y))
+    for field in iron_fields:
+        if field.resources > 0 and fog_of_war.is_tile_explored(
+            field.rect.centerx, field.rect.centery
+        ):
+            field.draw(surface_, camera)
+
+    for building in buildings:
+        if building.health > 0 and (
+            fog_of_war.is_tile_visible(building.rect.centerx, building.rect.centery)
+            or (
+                building.is_seen
+                and fog_of_war.is_tile_explored(
+                    building.rect.centerx, building.rect.centery
+                )
+            )
+        ):
+            building.draw(surface_, camera)
+
+    fog_of_war.draw(surface_, camera)
+    for unit in all_units:
+        if unit.team == Team.GDI or fog_of_war.is_tile_visible(
+            unit.rect.centerx, unit.rect.centery
+        ):
+            unit.draw(surface_, camera)
+
+    for projectile in projectiles:
+        if projectile.team == Team.GDI or fog_of_war.is_tile_visible(
+            projectile.rect.centerx, projectile.rect.centery
+        ):
+            projectile.draw(surface_, camera)
+
+    for particle in particles:
+        if fog_of_war.is_tile_visible(particle.rect.centerx, particle.rect.centery):
+            particle.draw(surface_, camera)
+
+    interface.draw(surface_)
+    if selecting and select_rect:
+        pg.draw.rect(surface_, (255, 255, 255), select_rect, 2)
+
+    console.draw(surface_)
+
+
 class Team(Enum):
     GDI = "gdi"
     NOD = "nod"
@@ -1347,14 +1392,14 @@ class ProductionInterface:
         pg.draw.rect(
             temp_surface,
             color_,
-            ((0, 0), building.SIZE),
+            ((0, 0), pending_building_cls_.SIZE),
             width=3,
         )
         surface_.blit(
             temp_surface,
             (
-                mouse_pos[0] - building.SIZE[0] // 2,
-                mouse_pos[1] - building.SIZE[1] // 2,
+                mouse_pos[0] - pending_building_cls_.SIZE[0] // 2,
+                mouse_pos[1] - pending_building_cls_.SIZE[1] // 2,
             ),
         )
 
@@ -2241,46 +2286,7 @@ if __name__ == "__main__":
         handle_projectiles(projectiles, all_units, buildings)
         ai.update()
         fog_of_war.update_visibility(player_units, buildings, Team.GDI)
-
-        screen.fill(pg.Color("black"))
-        screen.blit(base_map, (-camera.rect.x, -camera.rect.y))
-        for field in iron_fields:
-            if field.resources > 0 and fog_of_war.is_tile_explored(
-                field.rect.centerx, field.rect.centery
-            ):
-                field.draw(screen, camera)
-        for building in buildings:
-            if building.health > 0 and (
-                fog_of_war.is_tile_visible(building.rect.centerx, building.rect.centery)
-                or (
-                    building.is_seen
-                    and fog_of_war.is_tile_explored(
-                        building.rect.centerx, building.rect.centery
-                    )
-                )
-            ):
-                building.draw(screen, camera)
-
-        fog_of_war.draw(screen, camera)
-        for unit in all_units:
-            if unit.team == Team.GDI or fog_of_war.is_tile_visible(
-                unit.rect.centerx, unit.rect.centery
-            ):
-                unit.draw(screen, camera)
-        for projectile in projectiles:
-            if projectile.team == Team.GDI or fog_of_war.is_tile_visible(
-                projectile.rect.centerx, projectile.rect.centery
-            ):
-                projectile.draw(screen, camera)
-        for particle in particles:
-            if fog_of_war.is_tile_visible(particle.rect.centerx, particle.rect.centery):
-                particle.draw(screen, camera)
-
-        interface.draw(screen)
-        if selecting and select_rect:
-            pg.draw.rect(screen, (255, 255, 255), select_rect, 2)
-
-        console.draw(screen)
+        draw(screen)
         for obj in all_units:
             if hasattr(obj, "under_attack") and obj.under_attack:
                 obj.under_attack = False
