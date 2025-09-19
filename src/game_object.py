@@ -28,20 +28,12 @@ class GameObject(pg.sprite.Sprite):
         self.health = 0
         self.max_health = 0
         self.attack_range = 0
-        self.attack_damage = 0
-        self.attack_cooldown = 0
         self.cooldown_timer = 0
         self.selected = False
         self.under_attack = False
 
     def move_toward(self) -> None:
-        if (
-            self.target
-            and hasattr(self, "target_unit")
-            and self.target_unit
-            and hasattr(self.target_unit, "health")
-            and self.target_unit.health > 0
-        ):
+        if self.target and self.target_unit and self.target_unit.health > 0:
             dx, dy = (
                 self.target[0] - self.rect.centerx,
                 self.target[1] - self.rect.centery,
@@ -85,6 +77,7 @@ class GameObject(pg.sprite.Sprite):
         health_ratio = self.health / self.max_health
         if not self.under_attack and health_ratio == 1.0:
             return
+
         color = (0, 255, 0) if health_ratio > 0.5 else (255, 0, 0)
         bar_width = max(10, int(self.rect.width * health_ratio))
         screen_rect = camera.apply(self.rect)

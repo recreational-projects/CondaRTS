@@ -15,10 +15,17 @@ if TYPE_CHECKING:
 
 class Building(GameObject):
     SIZE = 60, 60
+    CONSTRUCTION_TIME = 50
 
     def __init__(self, x: float, y: float, team: Team, color, health: int) -> None:
         super().__init__(x, y, team)
         self.image = pg.Surface(self.SIZE, pg.SRCALPHA)
+        self.rect = self.image.get_rect(topleft=(x, y))
+        self.health = health
+        self.max_health = health
+        self.construction_progress = 0
+        self.is_seen = False
+
         # Add details to building
         pg.draw.rect(self.image, color, ((0, 0), self.SIZE))  # Base
         # Clamp color values to prevent negative values
@@ -33,18 +40,11 @@ class Building(GameObject):
         for i in range(10, self.SIZE[0] - 10, 20):
             pg.draw.rect(self.image, (200, 200, 200), (i, 10, 10, 10))  # Windows
 
-        self.rect = self.image.get_rect(topleft=(x, y))
-        self.health = health
-        self.max_health = health
-        self.construction_progress = 0
-        self.construction_time = 50
-        self.is_seen = False
-
     def update(self, particles: pg.sprite.Group[Particle]) -> None:
-        if self.construction_progress < self.construction_time:
+        if self.construction_progress < self.CONSTRUCTION_TIME:
             self.construction_progress += 1
             self.image.set_alpha(
-                int(255 * self.construction_progress / self.construction_time)
+                int(255 * self.construction_progress / self.CONSTRUCTION_TIME)
             )
         super().update()
         if self.health <= 0:

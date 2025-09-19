@@ -32,7 +32,6 @@ if TYPE_CHECKING:
 
     from src.geometry import Coordinate
 
-BASE_PRODUCTION_TIME = 180
 GDI_COLOR = (200, 150, 0)  # Brighter yellow for GDI
 NOD_COLOR = (200, 0, 0)  # Brighter red for NOD
 
@@ -87,17 +86,14 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
     for unit in units:
         if isinstance(unit, (Tank, Infantry)) and unit.cooldown_timer == 0:
             closest_target, min_dist = None, float("inf")
-            if (
-                unit.target_unit
-                and hasattr(unit.target_unit, "health")
-                and unit.target_unit.health > 0
-            ):
+            if unit.target_unit and unit.target_unit.health > 0:
                 dist = math.sqrt(
                     (unit.rect.centerx - unit.target_unit.rect.centerx) ** 2
                     + (unit.rect.centery - unit.target_unit.rect.centery) ** 2
                 )
                 if dist <= unit.attack_range:
                     closest_target, min_dist = unit.target_unit, dist
+
             if not closest_target:
                 for target in all_units:
                     if target.team != unit.team and target.health > 0:
@@ -107,6 +103,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                         )
                         if dist <= unit.attack_range and dist < min_dist:
                             closest_target, min_dist = target, dist
+
                 for building in buildings:
                     if building.team != unit.team and building.health > 0:
                         dist = math.sqrt(
@@ -115,6 +112,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                         )
                         if dist <= unit.attack_range and dist < min_dist:
                             closest_target, min_dist = building, dist
+
             if closest_target:
                 unit.target_unit = closest_target
                 unit.target = closest_target.rect.center
@@ -180,16 +178,18 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
 
 def handle_projectiles(projectiles, all_units, buildings) -> None:
     for projectile in projectiles:
-        hit = False
-        # Check collision with all units and buildings, not just the target
-        for target in all_units:
-            if (
-                target.team != projectile.team
-                and target.health > 0
-                and projectile.rect.colliderect(target.rect)
-            ):
-                target.health -= projectile.damage
-                target.under_attack = True  # Set under_attack when damage is applied
+        # Check collision with all enemy units and buildings, not just the target
+        enemy_units = [
+            u for u in all_units if u.team != projectile.team and u.health > 0
+        ]
+        enemy_buildings = [
+            b for b in buildings if b.team != projectile.team and b.health > 0
+        ]
+
+        for e in enemy_units + enemy_buildings:
+            if projectile.rect.colliderect(e.rect):
+                e.health -= projectile.damage
+                e.under_attack = True  # Set under_attack when damage is applied
                 for _ in range(5):
                     particles.add(
                         Particle(
@@ -202,46 +202,11 @@ def handle_projectiles(projectiles, all_units, buildings) -> None:
                             15,
                         )
                     )
-                if target.health <= 0:
-                    target.kill()
-                hit = True
+                projectile.kill()
+                if e.health <= 0:
+                    e.kill()
+
                 break
-        if not hit:
-            for target in buildings:
-                if (
-                    target.team != projectile.team
-                    and target.health > 0
-                    and projectile.rect.colliderect(target.rect)
-                ):
-                    target.health -= projectile.damage
-                    target.under_attack = (
-                        True  # Set under_attack when damage is applied
-                    )
-                    for _ in range(5):
-                        particles.add(
-                            Particle(
-                                projectile.rect.centerx,
-                                projectile.rect.centery,
-                                random.uniform(-2, 2),
-                                random.uniform(-2, 2),
-                                6,
-                                (255, 200, 100),
-                                15,
-                            )
-                        )
-                    if target.health <= 0:
-                        target.kill()
-                    hit = True
-                    break
-        if hit:
-            projectile.kill()
-        # Only kill projectile if it has no valid target or moves too far
-        elif not (
-            projectile.target
-            and hasattr(projectile.target, "health")
-            and projectile.target.health > 0
-        ):
-            projectile.kill()
 
 
 def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
@@ -312,11 +277,7 @@ class Tank(GameObject):
 
     def update(self) -> None:
         super().update()
-        if (
-            self.target_unit
-            and hasattr(self.target_unit, "health")
-            and self.target_unit.health > 0
-        ):
+        if self.target_unit and self.target_unit.health > 0:
             dist = math.sqrt(
                 (self.rect.centerx - self.target_unit.rect.centerx) ** 2
                 + (self.rect.centery - self.target_unit.rect.centery) ** 2
@@ -372,11 +333,6 @@ class Infantry(GameObject):
     def __init__(self, x: float, y: float, team: Team) -> None:
         super().__init__(x, y, team)
         self.image = pg.Surface((16, 16), pg.SRCALPHA)
-        # Draw infantry as a simple soldier
-        pg.draw.circle(self.image, (150, 150, 150), (8, 4), 4)  # Head
-        pg.draw.rect(self.image, (100, 100, 100), (6, 8, 4, 8))  # Body
-        pg.draw.line(self.image, (80, 80, 80), (8, 16), (8, 20))  # Legs
-        pg.draw.line(self.image, (120, 120, 120), (10, 10), (14, 10))  # Gun
         self.rect = self.image.get_rect(center=(x, y))
         self.speed = 3.5 if team == Team.GDI else 4
         self.health = 100 if team == Team.GDI else 60
@@ -385,13 +341,15 @@ class Infantry(GameObject):
         self.attack_damage = 8
         self.attack_cooldown = 25
 
+        # Draw infantry as a simple soldier
+        pg.draw.circle(self.image, (150, 150, 150), (8, 4), 4)  # Head
+        pg.draw.rect(self.image, (100, 100, 100), (6, 8, 4, 8))  # Body
+        pg.draw.line(self.image, (80, 80, 80), (8, 16), (8, 20))  # Legs
+        pg.draw.line(self.image, (120, 120, 120), (10, 10), (14, 10))  # Gun
+
     def update(self) -> None:
         super().update()
-        if (
-            self.target_unit
-            and hasattr(self.target_unit, "health")
-            and self.target_unit.health > 0
-        ):
+        if self.target_unit and self.target_unit.health > 0:
             dist = math.sqrt(
                 (self.rect.centerx - self.target_unit.rect.centerx) ** 2
                 + (self.rect.centery - self.target_unit.rect.centery) ** 2
@@ -421,11 +379,6 @@ class Harvester(GameObject):
     ) -> None:
         super().__init__(x, y, team)
         self.image = pg.Surface((50, 30), pg.SRCALPHA)
-        # Draw harvester as a truck
-        pg.draw.rect(self.image, (120, 120, 120), (0, 0, 50, 30))  # Body
-        pg.draw.rect(self.image, (100, 100, 100), (5, 5, 40, 20))  # Cargo area
-        pg.draw.circle(self.image, (50, 50, 50), (10, 30), 5)  # Wheel 1
-        pg.draw.circle(self.image, (50, 50, 50), (40, 30), 5)  # Wheel 2
         self.rect = self.image.get_rect(center=(x, y))
         self.speed = 2.5
         self.health = 300
@@ -439,6 +392,12 @@ class Harvester(GameObject):
         self.attack_range = 50
         self.attack_damage = 10
         self.attack_cooldown = 30
+
+        # Draw harvester as a truck
+        pg.draw.rect(self.image, (120, 120, 120), (0, 0, 50, 30))  # Body
+        pg.draw.rect(self.image, (100, 100, 100), (5, 5, 40, 20))  # Cargo area
+        pg.draw.circle(self.image, (50, 50, 50), (10, 30), 5)  # Wheel 1
+        pg.draw.circle(self.image, (50, 50, 50), (40, 30), 5)  # Wheel 2
 
     def update(self) -> None:
         super().update()
@@ -540,6 +499,8 @@ class Harvester(GameObject):
 class Headquarters(Building):
     COST = 2000
     SIZE = 80, 80
+    BASE_PRODUCTION_TIME = 180
+    BASE_POWER = 300
 
     def __init__(self, x: float, y: float, team: Team) -> None:
         super().__init__(
@@ -552,17 +513,21 @@ class Headquarters(Building):
         self.iron = 1500
         self.production_queue: list[type[GameObject]] = []
         self.production_timer: float = 0
-        self.base_power = 300
         self.pending_building: type[Building] | None = None
         self.pending_building_pos: Coordinate | None = None
-        self.power_usage = 0
 
     @property
     def power_output(self) -> int:
-        return self.base_power + sum(
+        return self.BASE_POWER + sum(
             b.POWER_OUTPUT
             for b in buildings
             if b.team == self.team and isinstance(b, PowerPlant) and b.health > 0
+        )
+
+    @property
+    def power_usage(self) -> int:
+        return sum(u.POWER_USAGE for u in all_units if u.team == self.team) + sum(
+            b.POWER_USAGE for b in buildings if b.team == self.team and b != self
         )
 
     @property
@@ -570,7 +535,6 @@ class Headquarters(Building):
         return self.power_output >= self.power_usage
 
     def get_production_time(self, unit_class: type[GameObject]) -> float:
-        base_time = BASE_PRODUCTION_TIME
         if unit_class == Infantry:
             barracks_count = len(
                 [
@@ -579,7 +543,8 @@ class Headquarters(Building):
                     if b.team == self.team and isinstance(b, Barracks) and b.health > 0
                 ]
             )
-            return base_time * (0.9**barracks_count)
+            return self.BASE_PRODUCTION_TIME * (0.9**barracks_count)
+
         elif unit_class in [Tank, Harvester]:
             warfactory_count = len(
                 [
@@ -590,14 +555,12 @@ class Headquarters(Building):
                     and b.health > 0
                 ]
             )
-            return base_time * (0.9**warfactory_count)
-        return base_time
+            return self.BASE_PRODUCTION_TIME * (0.9**warfactory_count)
+
+        return self.BASE_PRODUCTION_TIME
 
     def update(self, *args, **kwargs) -> None:
         super().update(*args, **kwargs)
-        self.power_usage = sum(
-            u.POWER_USAGE for u in all_units if u.team == self.team
-        ) + sum(b.POWER_USAGE for b in buildings if b.team == self.team and b != self)
         if (
             self.production_queue
             and not self.production_timer
@@ -775,6 +738,7 @@ class Turret(Building):
                     )
                     if dist < self.attack_range and dist < min_dist:
                         closest_target, min_dist = target, dist
+
             if closest_target:
                 self.target_unit = closest_target
                 dx, dy = (
@@ -816,29 +780,31 @@ class Turret(Building):
         self.image.blit(base, (5, 5))
         self.image.blit(rotated_barrel, rotated_barrel.get_rect(center=(25, 25)))
         self.image.set_alpha(
-            int(255 * self.construction_progress / self.construction_time)
+            int(255 * self.construction_progress / self.CONSTRUCTION_TIME)
         )
 
 
 class Projectile(pg.sprite.Sprite):
+    SPEED: float = 6
+
     def __init__(
-        self, x: float, y: float, target: GameObject, damage: int, team: Team
+        self, x: float, y: float, target_unit: GameObject, damage: int, team: Team
     ) -> None:
         super().__init__()
         self.image: pg.Surface = pg.Surface((10, 5), pg.SRCALPHA)
-        pg.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))  # Brighter projectile
         self.rect: pg.Rect = self.image.get_rect(center=(x, y))
-        self.target = target
-        self.speed: float = 6
+        self.target_unit = target_unit
         self.damage = damage
         self.team = team
         self.particle_timer = 2
 
+        pg.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))
+
     def update(self) -> None:
-        if self.target and hasattr(self.target, "health") and self.target.health > 0:
+        if self.target_unit and self.target_unit.health > 0:
             dx, dy = (
-                self.target.rect.centerx - self.rect.centerx,
-                self.target.rect.centery - self.rect.centery,
+                self.target_unit.rect.centerx - self.rect.centerx,
+                self.target_unit.rect.centery - self.rect.centery,
             )
             dist = math.sqrt(dx**2 + dy**2)
             if dist > 3:
@@ -847,8 +813,8 @@ class Projectile(pg.sprite.Sprite):
                     pg.Surface((10, 5), pg.SRCALPHA), -math.degrees(angle)
                 )
                 pg.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))
-                self.rect.x += self.speed * math.cos(angle)
-                self.rect.y += self.speed * math.sin(angle)
+                self.rect.x += self.SPEED * math.cos(angle)
+                self.rect.y += self.SPEED * math.sin(angle)
                 if self.particle_timer <= 0:
                     particles.add(
                         Particle(
@@ -1962,8 +1928,7 @@ if __name__ == "__main__":
         fog_of_war.update_visibility(player_units, buildings, Team.GDI)
         draw(surface_=screen, font_=font)
         for obj in all_units:
-            if hasattr(obj, "under_attack") and obj.under_attack:
-                obj.under_attack = False
+            obj.under_attack = False
 
         pg.display.flip()
         clock.tick(60)
