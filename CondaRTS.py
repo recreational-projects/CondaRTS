@@ -237,38 +237,27 @@ def draw(surface_: pg.Surface) -> None:
     surface_.fill(pg.Color("black"))
     surface_.blit(base_map, (-camera.rect.x, -camera.rect.y))
     for field in iron_fields:
-        if field.resources > 0 and fog_of_war.is_tile_explored(
-            field.rect.centerx, field.rect.centery
-        ):
+        if field.resources > 0 and fog_of_war.is_explored(field.rect.center):
             field.draw(surface_, camera)
 
     for building in buildings:
         if building.health > 0 and (
-            fog_of_war.is_tile_visible(building.rect.centerx, building.rect.centery)
-            or (
-                building.is_seen
-                and fog_of_war.is_tile_explored(
-                    building.rect.centerx, building.rect.centery
-                )
-            )
+            fog_of_war.is_visible(building.rect.center)
+            or (building.is_seen and fog_of_war.is_explored(building.rect.center))
         ):
             building.draw(surface_, camera)
 
     fog_of_war.draw(surface_, camera)
     for unit in all_units:
-        if unit.team == Team.GDI or fog_of_war.is_tile_visible(
-            unit.rect.centerx, unit.rect.centery
-        ):
+        if unit.team == Team.GDI or fog_of_war.is_visible(unit.rect.center):
             unit.draw(surface_, camera)
 
     for projectile in projectiles:
-        if projectile.team == Team.GDI or fog_of_war.is_tile_visible(
-            projectile.rect.centerx, projectile.rect.centery
-        ):
+        if projectile.team == Team.GDI or fog_of_war.is_visible(projectile.rect.center):
             projectile.draw(surface_, camera)
 
     for particle in particles:
-        if fog_of_war.is_tile_visible(particle.rect.centerx, particle.rect.centery):
+        if fog_of_war.is_visible(particle.rect.center):
             particle.draw(surface_, camera)
 
     interface.draw(surface_)
@@ -340,24 +329,37 @@ class Camera:
         )
 
 
+@dataclass(kw_only=True)
 class FogOfWar:
-    def __init__(
-        self, map_width: int, map_height: int, tile_size: int = TILE_SIZE
-    ) -> None:
-        self.tile_size = tile_size
+    map_size: tuple[int, int]
+    tile_size: int
+    explored: list[list[bool]] = dataclass_field(default_factory=list)
+    visible: list[list[bool]] = dataclass_field(default_factory=list)
+    surface: pg.Surface = dataclass_field(init=False)
+
+    def __post_init__(self) -> None:
+        map_width, map_height = self.map_size
         self.explored = [
-            [False] * (map_height // tile_size) for _ in range(map_width // tile_size)
+            [False] * (map_height // self.tile_size)
+            for _ in range(map_width // self.tile_size)
         ]
         self.visible = [
-            [False] * (map_height // tile_size) for _ in range(map_width // tile_size)
+            [False] * (map_height // self.tile_size)
+            for _ in range(map_width // self.tile_size)
         ]
-        self.surface = pg.Surface((map_width, map_height), pg.SRCALPHA)
+        self.surface = pg.Surface(self.map_size, pg.SRCALPHA)
         self.surface.fill((0, 0, 0, 255))
 
-    def reveal(self, center, radius: float) -> None:
+    def tile(self, position: Coordinate) -> tuple[int, int]:
+        """Return tile."""
+        x, y = position
+        return int(x // self.tile_size), int(y // self.tile_size)
+
+    def _reveal(self, center: Coordinate, radius: float) -> None:
+        """Set tiles within `radius` of `center` as explored and visible."""
         cx, cy = center
-        tile_x, tile_y = cx // self.tile_size, cy // self.tile_size
-        radius_tiles = radius // self.tile_size
+        tile_x, tile_y = self.tile(center)
+        radius_tiles = int(radius // self.tile_size)
         for y in range(
             max(0, tile_y - radius_tiles),
             min(len(self.explored[0]), tile_y + radius_tiles + 1),
@@ -367,50 +369,54 @@ class FogOfWar:
                 min(len(self.explored), tile_x + radius_tiles + 1),
             ):
                 if (
-                    math.sqrt(
-                        (cx - (x * self.tile_size + self.tile_size // 2)) ** 2
-                        + (cy - (y * self.tile_size + self.tile_size // 2)) ** 2
-                    )
-                    <= radius
-                ):
+                    (cx - (x * self.tile_size + self.tile_size // 2)) ** 2
+                    + (cy - (y * self.tile_size + self.tile_size // 2)) ** 2
+                ) <= radius**2:
                     self.explored[x][y] = True
                     self.visible[x][y] = True
 
     def update_visibility(self, units, buildings, team: Team) -> None:
+        """Reveal tiles within range of `team`'s `unit`s and `buildings`."""
         self.visible = [
             [False] * len(self.explored[0]) for _ in range(len(self.explored))
         ]
         for unit in units:
-            if unit.team == team and hasattr(unit, "rect"):
-                self.reveal(unit.rect.center, 150)
+            if unit.team == team:
+                self._reveal(center=unit.rect.center, radius=150)
+
         for building in buildings:
-            if building.team == team and hasattr(building, "rect"):
-                self.reveal(building.rect.center, 200)
-            if hasattr(building, "rect") and building.health > 0:
-                tile_x, tile_y = (
-                    int(building.rect.centerx // self.tile_size),
-                    int(building.rect.centery // self.tile_size),
-                )
+            if building.team == team:
+                self._reveal(center=building.rect.center, radius=200)
+
+            if building.health > 0:
+                tile_x, tile_y = self.tile(building.rect.center)
                 if 0 <= tile_x < len(self.visible) and 0 <= tile_y < len(
                     self.visible[0]
                 ):
                     self.visible[tile_x][tile_y] = True
-                    building.is_seen = True
+                    # indirectly makes enemy buildings in tile visible
 
-    def is_tile_visible(self, x: float, y: float) -> bool:
-        tile_x, tile_y = int(x // self.tile_size), int(y // self.tile_size)
+    def is_visible(self, position: Coordinate) -> bool:
+        """Return whether `position` is in a visible tile."""
+        tile_x, tile_y = self.tile(position)
         if 0 <= tile_x < len(self.visible) and 0 <= tile_y < len(self.visible[0]):
             return self.visible[tile_x][tile_y]
+
         return False
 
-    def is_tile_explored(self, x: float, y: float) -> bool:
-        tile_x, tile_y = int(x // self.tile_size), int(y // self.tile_size)
+    def is_explored(self, position: Coordinate) -> bool:
+        """Return whether `position` is in an explored tile."""
+        tile_x, tile_y = self.tile(position)
         if 0 <= tile_x < len(self.explored) and 0 <= tile_y < len(self.explored[0]):
             return self.explored[tile_x][tile_y]
+
         return False
 
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        self.surface.fill((0, 0, 0, 255))
+    def draw(self, surface_: pg.Surface, camera: Camera) -> None:
+        """Draw opaque and semi-transparent fog tiles to `surface`.
+
+        NB: drawn over buildings; under units.
+        """
         for y in range(len(self.explored[0])):
             for x in range(len(self.explored)):
                 if self.explored[x][y]:
@@ -425,7 +431,8 @@ class FogOfWar:
                             self.tile_size,
                         ),
                     )
-        screen.blit(self.surface, (-camera.rect.x, -camera.rect.y))
+
+        surface_.blit(self.surface, (-camera.rect.x, -camera.rect.y))
 
 
 class Tank(GameObject):
@@ -2089,7 +2096,7 @@ if __name__ == "__main__":
     nod_headquarters.iron = 1500
     interface = ProductionInterface(headquarters=gdi_headquarters)
     console = GameConsole()
-    fog_of_war = FogOfWar(MAP_WIDTH, MAP_HEIGHT)
+    fog_of_war = FogOfWar(map_size=(MAP_WIDTH, MAP_HEIGHT), tile_size=TILE_SIZE)
 
     selected_building = None
     selecting = False
