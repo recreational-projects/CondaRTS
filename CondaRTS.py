@@ -9,8 +9,17 @@ from typing import TYPE_CHECKING, ClassVar
 
 import pygame as pg
 
-from src.constants import MAP_HEIGHT, MAP_WIDTH, TILE_SIZE
+from src.camera import Camera
+from src.constants import (
+    CONSOLE_HEIGHT,
+    MAP_HEIGHT,
+    MAP_WIDTH,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    TILE_SIZE,
+)
 from src.fog_of_war import FogOfWar
+from src.game_console import GameConsole
 from src.game_object import GameObject
 from src.geometry import is_valid_building_position, snap_to_grid
 from src.shapes import draw_progress_bar
@@ -20,11 +29,9 @@ if TYPE_CHECKING:
 
     from src.geometry import Coordinate
 
-SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
 BASE_PRODUCTION_TIME = 180
 GDI_COLOR = (200, 150, 0)  # Brighter yellow for GDI
 NOD_COLOR = (200, 0, 0)  # Brighter red for NOD
-CONSOLE_HEIGHT = 200
 
 
 def calculate_formation_positions(
@@ -271,63 +278,6 @@ def draw(surface_: pg.Surface) -> None:
 class Team(Enum):
     GDI = "gdi"
     NOD = "nod"
-
-
-class Camera:
-    def __init__(self, map_width: int, map_height: int) -> None:
-        self.rect = pg.Rect(0, 0, SCREEN_WIDTH - 200, SCREEN_HEIGHT - CONSOLE_HEIGHT)
-        self.map_width = map_width
-        self.map_height = map_height
-
-    def update(
-        self, selected_units, mouse_pos: Coordinate, interface_rect: pg.Rect
-    ) -> None:
-        mx, my = mouse_pos
-        if interface_rect.collidepoint(mx, my) or my > SCREEN_HEIGHT - CONSOLE_HEIGHT:
-            return
-        if selected_units:
-            avg_x = sum(unit.rect.centerx for unit in selected_units) / len(
-                selected_units
-            )
-            avg_y = sum(unit.rect.centery for unit in selected_units) / len(
-                selected_units
-            )
-            self.rect.center = (
-                max(
-                    self.rect.width // 2,
-                    min(self.map_width - self.rect.width // 2, int(avg_x)),
-                ),
-                max(
-                    self.rect.height // 2,
-                    min(self.map_height - self.rect.height // 2, int(avg_y)),
-                ),
-            )
-        else:
-            if mx < 30 and self.rect.left > 0:
-                self.rect.x -= 10
-            elif mx > SCREEN_WIDTH - 230 and self.rect.right < self.map_width:
-                self.rect.x += 10
-            if my < 30 and self.rect.top > 0:
-                self.rect.y -= 10
-            elif (
-                my > SCREEN_HEIGHT - CONSOLE_HEIGHT - 30
-                and self.rect.bottom < self.map_height
-            ):
-                self.rect.y += 10
-        self.rect.clamp_ip(pg.Rect(0, 0, self.map_width, self.map_height))
-
-    def apply(self, rect: pg.Rect) -> pg.Rect:
-        return pg.Rect(
-            rect.x - self.rect.x, rect.y - self.rect.y, rect.width, rect.height
-        )
-
-    def screen_to_world(self, screen_pos: Coordinate) -> Coordinate:
-        x, y = screen_pos
-        map_area_y = int(min(y, SCREEN_HEIGHT - CONSOLE_HEIGHT))
-        return (
-            max(0, min(self.map_width, int(x) + self.rect.x)),
-            max(0, min(self.map_height, map_area_y + self.rect.y)),
-        )
 
 
 class Tank(GameObject):
@@ -1362,78 +1312,6 @@ class ProductionInterface:
         return False
 
 
-class GameConsole:
-    def __init__(self) -> None:
-        self.rect = pg.Rect(
-            0, SCREEN_HEIGHT - CONSOLE_HEIGHT, SCREEN_WIDTH, CONSOLE_HEIGHT
-        )
-        self.lines: list[str] = []
-        self.max_lines = 20
-        self.scroll_offset = 0
-        self.scroll_speed = 20
-        self.selected_text = ""
-
-    def log(self, message: str) -> None:
-        self.lines.append(message)
-        if len(self.lines) > self.max_lines:
-            self.lines.pop(0)
-
-    def draw(self, screen: pg.Surface) -> None:
-        pg.draw.rect(screen, (40, 40, 40), self.rect)  # Darker console
-        pg.draw.rect(screen, (80, 80, 80), self.rect, 2)
-        visible_lines = self.lines[self.scroll_offset :]
-        for i, line in enumerate(visible_lines):
-            if i >= self.max_lines:
-                break
-            text_surface = console_font.render(line, True, (200, 200, 200))
-            screen.blit(text_surface, (self.rect.x + 5, self.rect.y + 5 + i * 18))
-        scroll_height = self.rect.height - 20
-        scroll_pos = (
-            (self.scroll_offset / max(1, len(self.lines) - self.max_lines))
-            * (scroll_height - 20)
-            if len(self.lines) > self.max_lines
-            else 0
-        )
-        pg.draw.rect(
-            screen,
-            (150, 150, 150),
-            (self.rect.right - 15, self.rect.y + 5 + scroll_pos, 10, 20),
-        )
-
-    def handle_event(self, event: pg.Event) -> None:
-        mouse_pos = pg.mouse.get_pos()
-        if event.type == pg.MOUSEWHEEL:
-            if self.rect.collidepoint(mouse_pos):
-                max_scroll = max(0, len(self.lines) - self.max_lines)
-                scroll_amount = event.y * self.scroll_speed
-                self.scroll_offset = max(
-                    0, min(max_scroll, self.scroll_offset - scroll_amount)
-                )
-                print(
-                    f"Console scroll detected: y={event.y}, scroll_offset={self.scroll_offset}"
-                )
-        elif event.type == pg.KEYDOWN:
-            if self.rect.collidepoint(mouse_pos):
-                max_scroll = max(0, len(self.lines) - self.max_lines)
-                if event.key == pg.K_UP:
-                    self.scroll_offset = max(0, self.scroll_offset - 1)
-                    print(f"Console scroll up: scroll_offset={self.scroll_offset}")
-                elif event.key == pg.K_DOWN:
-                    self.scroll_offset = min(max_scroll, self.scroll_offset + 1)
-                    print(f"Console scroll down: scroll_offset={self.scroll_offset}")
-        elif event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
-            if self.rect.collidepoint(event.pos):
-                start_y = self.rect.y + 5
-                line_idx = (event.pos[1] - start_y) // 18 + self.scroll_offset
-                if 0 <= line_idx < len(self.lines):
-                    self.selected_text = self.lines[line_idx]
-                    try:
-                        pg.scrap.put_text(pg.SCRAP_TEXT)
-                        print(f"Copied to clipboard: {self.selected_text}")
-                    except Exception as e:
-                        print(f"Failed to copy to clipboard: {e}")
-
-
 class AI:
     def __init__(
         self,
@@ -1975,7 +1853,6 @@ if __name__ == "__main__":
     screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     clock = pg.time.Clock()
     font = pg.font.SysFont(None, 24)
-    console_font = pg.font.SysFont(None, 18)
 
     player_units: pg.sprite.Group = pg.sprite.Group()
     enemy_units: pg.sprite.Group = pg.sprite.Group()
@@ -1997,7 +1874,7 @@ if __name__ == "__main__":
     selecting = False
     select_start = None
     select_rect = None
-    camera = Camera(MAP_WIDTH, MAP_HEIGHT)
+    camera = Camera()
     base_map = pg.Surface((MAP_WIDTH, MAP_HEIGHT))
     # Improved map with grass texture
     for x in range(0, MAP_WIDTH, TILE_SIZE):

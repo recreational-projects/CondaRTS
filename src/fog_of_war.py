@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 import pygame as pg
 
 if TYPE_CHECKING:
-    from CondaRTS import Camera, Team
+    from CondaRTS import Team
+    from src.camera import Camera
     from src.geometry import Coordinate
 
 

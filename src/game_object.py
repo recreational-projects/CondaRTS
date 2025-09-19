@@ -8,7 +8,8 @@ import pygame as pg
 from src.constants import MAP_HEIGHT, MAP_WIDTH
 
 if TYPE_CHECKING:
-    from CondaRTS import Camera, Team
+    from CondaRTS import Team
+    from src.camera import Camera
     from src.geometry import Coordinate
 
 
