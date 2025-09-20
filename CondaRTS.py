@@ -765,8 +765,9 @@ class Headquarters(Building):
                 if issubclass(unit_cls, Building):
                     self.pending_building = unit_cls
                     self.pending_building_pos = None
+
                 else:
-                    spawn_building = self
+                    spawn_building: Building = self
                     if unit_cls == Infantry:
                         barracks = [
                             b
@@ -777,6 +778,7 @@ class Headquarters(Building):
                         ]
                         if not barracks:
                             return
+
                         spawn_building = min(
                             barracks,
                             key=lambda b: math.sqrt(
@@ -794,6 +796,7 @@ class Headquarters(Building):
                         ]
                         if not warfactories:
                             return
+
                         spawn_building = min(
                             warfactories,
                             key=lambda b: math.sqrt(
@@ -806,7 +809,7 @@ class Headquarters(Building):
                         spawn_building.rect.centery,
                     )
                     new_units = [
-                        unit_cls(spawn_x, spawn_y, self.team, self)
+                        Harvester(spawn_x, spawn_y, self.team, self)
                         if unit_cls == Harvester
                         else unit_cls(spawn_x, spawn_y, self.team)
                     ]
@@ -820,11 +823,13 @@ class Headquarters(Building):
                             unit
                         )
                         all_units.add(unit)
+
                 self.production_timer = (
                     self.get_production_time(self.production_queue[0])
                     if self.production_queue and self.has_enough_power
                     else 0
                 )
+
         super().update()
 
     def place_building(self, x: float, y: float, unit_class) -> None:
@@ -2024,20 +2029,23 @@ if __name__ == "__main__":
     clock = pg.time.Clock()
     font = pg.font.SysFont(None, 24)
     console_font = pg.font.SysFont(None, 18)
-    player_units = pg.sprite.Group()
-    enemy_units = pg.sprite.Group()
-    all_units = pg.sprite.Group()
-    iron_fields = pg.sprite.Group()
-    buildings = pg.sprite.Group()
-    projectiles = pg.sprite.Group()
-    particles = pg.sprite.Group()
+
+    player_units: pg.sprite.Group = pg.sprite.Group()
+    enemy_units: pg.sprite.Group = pg.sprite.Group()
+    all_units: pg.sprite.Group = pg.sprite.Group()
+    iron_fields: pg.sprite.Group = pg.sprite.Group()
+    buildings: pg.sprite.Group = pg.sprite.Group()
+    projectiles: pg.sprite.Group = pg.sprite.Group()
+    particles: pg.sprite.Group = pg.sprite.Group()
+    selected_units: pg.sprite.Group = pg.sprite.Group()
+
     gdi_headquarters = Headquarters(300, 300, Team.GDI)
     nod_headquarters = Headquarters(MAP_WIDTH - 300, MAP_HEIGHT - 300, Team.NOD)
     nod_headquarters.iron = 1500
     interface = ProductionInterface(headquarters=gdi_headquarters)
     console = GameConsole()
     fog_of_war = FogOfWar(MAP_WIDTH, MAP_HEIGHT)
-    selected_units = pg.sprite.Group()
+
     selected_building = None
     selecting = False
     select_start = None
