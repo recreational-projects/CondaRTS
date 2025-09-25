@@ -17,7 +17,8 @@ def draw_progress_bar(
         raise ValueError("Progress should be between 0 and 1 inclusive")
 
     inner_rect = pg.Rect(
-        (rect.left + 1, rect.top + 1), (rect.width - 2, rect.height - 2)
+        (rect.left + 1, rect.top + 1),
+        (rect.width - 2, rect.height - 2),
     )
     bar = pg.Rect(
         (inner_rect.left + 1, inner_rect.top + 1),

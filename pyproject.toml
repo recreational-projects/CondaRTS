@@ -9,20 +9,22 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "mypy>=1.18.2",
     "pre-commit>=4.3.0",
-    "ruff>=0.13.0",
+    "ruff>=0.13.1",
 ]
 
 [tool.ruff.lint]
 select = [
     "ANN201",  # Missing return type annotation for public function
     "ANN204",  # Missing return type annotation for special method
-    "I",
+    "F",  # Pyflakes
+    "I",  # isort
+    "TC",  # flake8-type-checking
+    "UP",  # pyupgrade
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "CondaRTS.py" = [
-    "ANN201",
-    "ANN204",
     "COM812",  # Trailing comma missing - conflicts with ruff format
 ]
