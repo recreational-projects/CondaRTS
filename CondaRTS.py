@@ -4,7 +4,6 @@ import math
 import random
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from enum import Enum
 from typing import TYPE_CHECKING, ClassVar
 
 import pygame as pg
@@ -18,6 +17,7 @@ from src.constants import (
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     TILE_SIZE,
+    Team,
 )
 from src.fog_of_war import FogOfWar
 from src.game_console import GameConsole
@@ -241,11 +241,6 @@ def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
         pg.draw.rect(surface_, (255, 255, 255), select_rect, 2)
 
     console.draw(surface_)
-
-
-class Team(Enum):
-    GDI = "gdi"
-    NOD = "nod"
 
 
 class Tank(GameObject):
