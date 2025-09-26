@@ -27,6 +27,7 @@ from src.iron_field import IronField
 from src.particle import Particle
 from src.projectile import Projectile
 from src.shapes import draw_progress_bar
+from src.turret import Turret
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -625,9 +626,7 @@ class Headquarters(Building):
                     for unit, pos in zip(new_units, formation_positions):
                         unit.rect.center = pos
                         unit.formation_target = pos
-                        (player_units if self.team == Team.GDI else enemy_units).add(
-                            unit
-                        )
+                        (player_units if self.team == Team.GDI else ai_units).add(unit)
                         all_units.add(unit)
 
                 self.production_timer = (
@@ -697,86 +696,6 @@ class PowerPlant(Building):
             team,
             (130, 130, 0) if team == Team.GDI else (130, 0, 0),
             500,
-        )
-
-
-class Turret(Building):
-    COST = 600
-    POWER_USAGE = 25
-    SIZE = 50, 50
-
-    def __init__(self, x: float, y: float, team: Team) -> None:
-        super().__init__(
-            x,
-            y,
-            team,
-            (180, 180, 0) if team == Team.GDI else (180, 0, 0),
-            500,
-        )
-        self.attack_range = 180
-        self.attack_damage = 15
-        self.attack_cooldown = 25
-        self.cooldown_timer = 0
-        self.target_unit = None
-        self.angle: float = 0
-
-    def update(self, *args, **kwargs) -> None:
-        super().update(*args, **kwargs)
-        if self.cooldown_timer > 0:
-            self.cooldown_timer -= 1
-        if self.cooldown_timer == 0:
-            closest_target, min_dist = None, float("inf")
-            for target in all_units:
-                if target.team != self.team and target.health > 0:
-                    dist = math.sqrt(
-                        (self.rect.centerx - target.rect.centerx) ** 2
-                        + (self.rect.centery - target.rect.centery) ** 2
-                    )
-                    if dist < self.attack_range and dist < min_dist:
-                        closest_target, min_dist = target, dist
-
-            if closest_target:
-                self.target_unit = closest_target
-                dx, dy = (
-                    closest_target.rect.centerx - self.rect.centerx,
-                    closest_target.rect.centery - self.rect.centery,
-                )
-                self.angle = math.degrees(math.atan2(-dy, dx))
-                projectiles.add(
-                    Projectile(
-                        self.rect.centerx,
-                        self.rect.centery,
-                        closest_target,
-                        self.attack_damage,
-                        self.team,
-                    )
-                )
-                self.cooldown_timer = self.attack_cooldown
-                for _ in range(5):
-                    particles.add(
-                        Particle(
-                            self.rect.centerx,
-                            self.rect.centery,
-                            random.uniform(-1.5, 1.5),
-                            random.uniform(-1.5, 1.5),
-                            random.randint(6, 10),
-                            (100, 100, 100),
-                            20,
-                        )
-                    )
-            else:
-                self.target_unit = None
-
-        self.image = pg.Surface((50, 50), pg.SRCALPHA)
-        base = pg.Surface((40, 40), pg.SRCALPHA)
-        base.fill((180, 180, 0) if self.team == Team.GDI else (180, 0, 0))
-        barrel = pg.Surface((25, 6), pg.SRCALPHA)
-        pg.draw.line(barrel, (80, 80, 80), (0, 3), (18, 3), 4)
-        rotated_barrel = pg.transform.rotate(barrel, self.angle)
-        self.image.blit(base, (5, 5))
-        self.image.blit(rotated_barrel, rotated_barrel.get_rect(center=(25, 25)))
-        self.image.set_alpha(
-            int(255 * self.construction_progress / self.CONSTRUCTION_TIME)
         )
 
 
@@ -1645,7 +1564,7 @@ if __name__ == "__main__":
     font = pg.font.SysFont(None, 24)
 
     player_units: pg.sprite.Group = pg.sprite.Group()
-    enemy_units: pg.sprite.Group = pg.sprite.Group()
+    ai_units: pg.sprite.Group = pg.sprite.Group()
     all_units: pg.sprite.Group = pg.sprite.Group()
     iron_fields: pg.sprite.Group = pg.sprite.Group()
     buildings: pg.sprite.Group = pg.sprite.Group()
@@ -1679,19 +1598,19 @@ if __name__ == "__main__":
                     TILE_SIZE // 4,
                 )  # Dark spots
 
-    ai = AI(nod_headquarters, enemy_units, all_units, iron_fields, buildings)
+    ai = AI(nod_headquarters, ai_units, all_units, iron_fields, buildings)
 
     player_units.add(Infantry(350, 300, Team.GDI))
     player_units.add(Infantry(370, 300, Team.GDI))
     player_units.add(Infantry(390, 300, Team.GDI))
     player_units.add(Harvester(400, 400, Team.GDI, gdi_headquarters))
 
-    enemy_units.add(Infantry(2050, 1200, Team.NOD))
-    enemy_units.add(Infantry(2070, 1200, Team.NOD))
-    enemy_units.add(Infantry(2090, 1200, Team.NOD))
-    enemy_units.add(Harvester(2200, 1300, Team.NOD, nod_headquarters))
+    ai_units.add(Infantry(2050, 1200, Team.NOD))
+    ai_units.add(Infantry(2070, 1200, Team.NOD))
+    ai_units.add(Infantry(2090, 1200, Team.NOD))
+    ai_units.add(Harvester(2200, 1300, Team.NOD, nod_headquarters))
 
-    all_units.add(player_units, enemy_units)
+    all_units.add(player_units, ai_units)
     buildings.add(gdi_headquarters, nod_headquarters)
     for _ in range(40):
         iron_fields.add(
@@ -1846,12 +1765,28 @@ if __name__ == "__main__":
         camera.update(selected_units, pg.mouse.get_pos(), interface.surface.get_rect())
         all_units.update()
         iron_fields.update()
-        buildings.update(particles)
+        for building in buildings:
+            if isinstance(building, Turret):
+                if building.team == Team.GDI:
+                    building.update(
+                        particles=particles,
+                        projectiles=projectiles,
+                        enemy_units=ai_units,
+                    )
+                else:
+                    building.update(
+                        particles=particles,
+                        projectiles=projectiles,
+                        enemy_units=player_units,
+                    )
+            else:
+                building.update(particles=particles)
+
         projectiles.update()
         particles.update()
         handle_collisions(all_units)
         handle_attacks(player_units, all_units, buildings, projectiles, particles)
-        handle_attacks(enemy_units, all_units, buildings, projectiles, particles)
+        handle_attacks(ai_units, all_units, buildings, projectiles, particles)
         handle_projectiles(projectiles, all_units, buildings)
         ai.update()
         fog_of_war.update_visibility(player_units, buildings, Team.GDI)
