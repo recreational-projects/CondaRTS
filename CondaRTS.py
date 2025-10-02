@@ -4,11 +4,11 @@ import math
 import random
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from enum import Enum
 from typing import TYPE_CHECKING, ClassVar
 
 import pygame as pg
 
+from src.barracks import Barracks
 from src.building import Building
 from src.camera import Camera
 from src.constants import (
@@ -18,14 +18,21 @@ from src.constants import (
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     TILE_SIZE,
+    Team,
 )
 from src.fog_of_war import FogOfWar
 from src.game_console import GameConsole
 from src.game_object import GameObject
 from src.geometry import is_valid_building_position, snap_to_grid
+from src.infantry import Infantry
 from src.iron_field import IronField
 from src.particle import Particle
+from src.power_plant import PowerPlant
+from src.projectile import Projectile
 from src.shapes import draw_progress_bar
+from src.tank import Tank
+from src.turret import Turret
+from src.war_factory import WarFactory
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -241,133 +248,6 @@ def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
         pg.draw.rect(surface_, (255, 255, 255), select_rect, 2)
 
     console.draw(surface_)
-
-
-class Team(Enum):
-    GDI = "gdi"
-    NOD = "nod"
-
-
-class Tank(GameObject):
-    COST = 500
-    POWER_USAGE = 15
-
-    def __init__(self, x: float, y: float, team: Team) -> None:
-        super().__init__(x, y, team)
-        self.base_image = pg.Surface((30, 20), pg.SRCALPHA)
-        # Draw tank body (front facing east/right)
-        pg.draw.rect(self.base_image, (100, 100, 100), (0, 0, 30, 20))  # Hull
-        pg.draw.rect(self.base_image, (80, 80, 80), (2, 2, 26, 16))  # Inner hull
-        pg.draw.rect(self.base_image, (50, 50, 50), (0, -2, 30, 4))  # Tracks top
-        pg.draw.rect(self.base_image, (50, 50, 50), (0, 18, 30, 4))  # Tracks bottom
-        self.barrel_image = pg.Surface((20, 4), pg.SRCALPHA)
-        pg.draw.rect(
-            self.barrel_image, (70, 70, 70), (0, 0, 20, 4)
-        )  # Barrel (extends right)
-        self.image = self.base_image
-        self.rect = self.image.get_rect(center=(x, y))
-        self.speed = 2.5 if team == Team.GDI else 3
-        self.health = 200 if team == Team.GDI else 120
-        self.max_health = self.health
-        self.attack_range = 200
-        self.attack_damage = 20 if team == Team.GDI else 15
-        self.attack_cooldown = 50
-        self.angle: float = 0
-        self.recoil = 0
-
-    def update(self) -> None:
-        super().update()
-        if self.target_unit and self.target_unit.health > 0:
-            dist = math.sqrt(
-                (self.rect.centerx - self.target_unit.rect.centerx) ** 2
-                + (self.rect.centery - self.target_unit.rect.centery) ** 2
-            )
-            self.target = (
-                (self.target_unit.rect.centerx, self.target_unit.rect.centery)
-                if dist <= 250
-                else None
-            )
-            self.target_unit = self.target_unit if self.target else None
-        if self.target:
-            dx, dy = (
-                self.target[0] - self.rect.centerx,
-                self.target[1] - self.rect.centery,
-            )
-            self.angle = math.degrees(
-                math.atan2(dy, dx)
-            )  # Use dy instead of -dy to fix vertical direction
-            self.image = pg.Surface((40, 40), pg.SRCALPHA)
-            # Rotate base image to face target (base image faces east, so -angle aligns it correctly)
-            rotated_base = pg.transform.rotate(self.base_image, -self.angle)
-            self.image.blit(rotated_base, rotated_base.get_rect(center=(20, 20)))
-            # Handle barrel with recoil
-            barrel_length = 20 - self.recoil * 2
-            barrel_image = pg.Surface((barrel_length, 4), pg.SRCALPHA)
-            pg.draw.rect(barrel_image, (70, 70, 70), (0, 0, barrel_length, 4))
-            # Rotate barrel to match target direction
-            rotated_barrel = pg.transform.rotate(
-                barrel_image, -self.angle
-            )  # Barrel also faces east initially
-            self.image.blit(rotated_barrel, rotated_barrel.get_rect(center=(20, 20)))
-            if self.recoil > 0:
-                self.recoil -= 1
-
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
-        if self.selected:
-            pg.draw.circle(
-                screen,
-                (255, 255, 255),
-                camera.apply(self.rect).center,
-                self.rect.width // 2 + 2,
-                2,
-            )  # Circular selection
-
-        self.draw_health_bar(screen, camera)
-
-
-class Infantry(GameObject):
-    COST = 100
-    POWER_USAGE = 5
-
-    def __init__(self, x: float, y: float, team: Team) -> None:
-        super().__init__(x, y, team)
-        self.image = pg.Surface((16, 16), pg.SRCALPHA)
-        self.rect = self.image.get_rect(center=(x, y))
-        self.speed = 3.5 if team == Team.GDI else 4
-        self.health = 100 if team == Team.GDI else 60
-        self.max_health = self.health
-        self.attack_range = 50
-        self.attack_damage = 8
-        self.attack_cooldown = 25
-
-        # Draw infantry as a simple soldier
-        pg.draw.circle(self.image, (150, 150, 150), (8, 4), 4)  # Head
-        pg.draw.rect(self.image, (100, 100, 100), (6, 8, 4, 8))  # Body
-        pg.draw.line(self.image, (80, 80, 80), (8, 16), (8, 20))  # Legs
-        pg.draw.line(self.image, (120, 120, 120), (10, 10), (14, 10))  # Gun
-
-    def update(self) -> None:
-        super().update()
-        if self.target_unit and self.target_unit.health > 0:
-            dist = math.sqrt(
-                (self.rect.centerx - self.target_unit.rect.centerx) ** 2
-                + (self.rect.centery - self.target_unit.rect.centery) ** 2
-            )
-            self.target = (
-                (self.target_unit.rect.centerx, self.target_unit.rect.centery)
-                if dist <= 200
-                else None
-            )
-            self.target_unit = self.target_unit if self.target else None
-
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
-        if self.selected:
-            pg.draw.circle(
-                screen, (255, 255, 255), camera.apply(self.rect).center, 10, 2
-            )
-        self.draw_health_bar(screen, camera)
 
 
 class Harvester(GameObject):
@@ -629,9 +509,7 @@ class Headquarters(Building):
                     for unit, pos in zip(new_units, formation_positions):
                         unit.rect.center = pos
                         unit.formation_target = pos
-                        (player_units if self.team == Team.GDI else enemy_units).add(
-                            unit
-                        )
+                        (player_units if self.team == Team.GDI else ai_units).add(unit)
                         all_units.add(unit)
 
                 self.production_timer = (
@@ -659,196 +537,6 @@ class Headquarters(Building):
     def draw(self, screen: pg.Surface, camera: Camera) -> None:
         screen.blit(self.image, camera.apply(self.rect).topleft)
         self.draw_health_bar(screen, camera)
-
-
-class Barracks(Building):
-    COST = 500
-    POWER_USAGE = 25
-
-    def __init__(self, x: float, y: float, team: Team) -> None:
-        super().__init__(
-            x,
-            y,
-            team,
-            (150, 150, 0) if team == Team.GDI else (150, 0, 0),
-            600,
-        )
-
-
-class WarFactory(Building):
-    COST = 1000
-    POWER_USAGE = 35
-
-    def __init__(self, x: float, y: float, team: Team) -> None:
-        super().__init__(
-            x,
-            y,
-            team,
-            (170, 170, 0) if team == Team.GDI else (170, 0, 0),
-            800,
-        )
-
-
-class PowerPlant(Building):
-    COST = 300
-    POWER_OUTPUT = 100
-    POWER_USAGE = 0
-
-    def __init__(self, x: float, y: float, team: Team) -> None:
-        super().__init__(
-            x,
-            y,
-            team,
-            (130, 130, 0) if team == Team.GDI else (130, 0, 0),
-            500,
-        )
-
-
-class Turret(Building):
-    COST = 600
-    POWER_USAGE = 25
-    SIZE = 50, 50
-
-    def __init__(self, x: float, y: float, team: Team) -> None:
-        super().__init__(
-            x,
-            y,
-            team,
-            (180, 180, 0) if team == Team.GDI else (180, 0, 0),
-            500,
-        )
-        self.attack_range = 180
-        self.attack_damage = 15
-        self.attack_cooldown = 25
-        self.cooldown_timer = 0
-        self.target_unit = None
-        self.angle: float = 0
-
-    def update(self, *args, **kwargs) -> None:
-        super().update(*args, **kwargs)
-        if self.cooldown_timer > 0:
-            self.cooldown_timer -= 1
-        if self.cooldown_timer == 0:
-            closest_target, min_dist = None, float("inf")
-            for target in all_units:
-                if target.team != self.team and target.health > 0:
-                    dist = math.sqrt(
-                        (self.rect.centerx - target.rect.centerx) ** 2
-                        + (self.rect.centery - target.rect.centery) ** 2
-                    )
-                    if dist < self.attack_range and dist < min_dist:
-                        closest_target, min_dist = target, dist
-
-            if closest_target:
-                self.target_unit = closest_target
-                dx, dy = (
-                    closest_target.rect.centerx - self.rect.centerx,
-                    closest_target.rect.centery - self.rect.centery,
-                )
-                self.angle = math.degrees(math.atan2(-dy, dx))
-                projectiles.add(
-                    Projectile(
-                        self.rect.centerx,
-                        self.rect.centery,
-                        closest_target,
-                        self.attack_damage,
-                        self.team,
-                    )
-                )
-                self.cooldown_timer = self.attack_cooldown
-                for _ in range(5):
-                    particles.add(
-                        Particle(
-                            self.rect.centerx,
-                            self.rect.centery,
-                            random.uniform(-1.5, 1.5),
-                            random.uniform(-1.5, 1.5),
-                            random.randint(6, 10),
-                            (100, 100, 100),
-                            20,
-                        )
-                    )
-            else:
-                self.target_unit = None
-
-        self.image = pg.Surface((50, 50), pg.SRCALPHA)
-        base = pg.Surface((40, 40), pg.SRCALPHA)
-        base.fill((180, 180, 0) if self.team == Team.GDI else (180, 0, 0))
-        barrel = pg.Surface((25, 6), pg.SRCALPHA)
-        pg.draw.line(barrel, (80, 80, 80), (0, 3), (18, 3), 4)
-        rotated_barrel = pg.transform.rotate(barrel, self.angle)
-        self.image.blit(base, (5, 5))
-        self.image.blit(rotated_barrel, rotated_barrel.get_rect(center=(25, 25)))
-        self.image.set_alpha(
-            int(255 * self.construction_progress / self.CONSTRUCTION_TIME)
-        )
-
-
-class Projectile(pg.sprite.Sprite):
-    SPEED: float = 6
-
-    def __init__(
-        self, x: float, y: float, target_unit: GameObject, damage: int, team: Team
-    ) -> None:
-        super().__init__()
-        self.image: pg.Surface = pg.Surface((10, 5), pg.SRCALPHA)
-        self.rect: pg.Rect = self.image.get_rect(center=(x, y))
-        self.target_unit = target_unit
-        self.damage = damage
-        self.team = team
-        self.particle_timer = 2
-
-        pg.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))
-
-    def update(self) -> None:
-        if self.target_unit and self.target_unit.health > 0:
-            dx, dy = (
-                self.target_unit.rect.centerx - self.rect.centerx,
-                self.target_unit.rect.centery - self.rect.centery,
-            )
-            dist = math.sqrt(dx**2 + dy**2)
-            if dist > 3:
-                angle = math.atan2(dy, dx)
-                self.image = pg.transform.rotate(
-                    pg.Surface((10, 5), pg.SRCALPHA), -math.degrees(angle)
-                )
-                pg.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))
-                self.rect.x += self.SPEED * math.cos(angle)
-                self.rect.y += self.SPEED * math.sin(angle)
-                if self.particle_timer <= 0:
-                    particles.add(
-                        Particle(
-                            self.rect.centerx,
-                            self.rect.centery,
-                            -math.cos(angle) * random.uniform(0.5, 1.5),
-                            -math.sin(angle) * random.uniform(0.5, 1.5),
-                            5,
-                            (255, 255, 150),
-                            15,
-                        )
-                    )
-                    self.particle_timer = 2
-                else:
-                    self.particle_timer -= 1
-            else:
-                self.kill()
-                for _ in range(5):
-                    particles.add(
-                        Particle(
-                            self.rect.centerx,
-                            self.rect.centery,
-                            random.uniform(-2, 2),
-                            random.uniform(-2, 2),
-                            6,
-                            (255, 100, 0),
-                            15,
-                        )
-                    )  # Orange explosion
-        else:
-            self.kill()
-
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
 
 
 @dataclass(kw_only=True)
@@ -1716,7 +1404,7 @@ if __name__ == "__main__":
     font = pg.font.SysFont(None, 24)
 
     player_units: pg.sprite.Group = pg.sprite.Group()
-    enemy_units: pg.sprite.Group = pg.sprite.Group()
+    ai_units: pg.sprite.Group = pg.sprite.Group()
     all_units: pg.sprite.Group = pg.sprite.Group()
     iron_fields: pg.sprite.Group = pg.sprite.Group()
     buildings: pg.sprite.Group = pg.sprite.Group()
@@ -1750,19 +1438,19 @@ if __name__ == "__main__":
                     TILE_SIZE // 4,
                 )  # Dark spots
 
-    ai = AI(nod_headquarters, enemy_units, all_units, iron_fields, buildings)
+    ai = AI(nod_headquarters, ai_units, all_units, iron_fields, buildings)
 
     player_units.add(Infantry(350, 300, Team.GDI))
     player_units.add(Infantry(370, 300, Team.GDI))
     player_units.add(Infantry(390, 300, Team.GDI))
     player_units.add(Harvester(400, 400, Team.GDI, gdi_headquarters))
 
-    enemy_units.add(Infantry(2050, 1200, Team.NOD))
-    enemy_units.add(Infantry(2070, 1200, Team.NOD))
-    enemy_units.add(Infantry(2090, 1200, Team.NOD))
-    enemy_units.add(Harvester(2200, 1300, Team.NOD, nod_headquarters))
+    ai_units.add(Infantry(2050, 1200, Team.NOD))
+    ai_units.add(Infantry(2070, 1200, Team.NOD))
+    ai_units.add(Infantry(2090, 1200, Team.NOD))
+    ai_units.add(Harvester(2200, 1300, Team.NOD, nod_headquarters))
 
-    all_units.add(player_units, enemy_units)
+    all_units.add(player_units, ai_units)
     buildings.add(gdi_headquarters, nod_headquarters)
     for _ in range(40):
         iron_fields.add(
@@ -1917,12 +1605,28 @@ if __name__ == "__main__":
         camera.update(selected_units, pg.mouse.get_pos(), interface.surface.get_rect())
         all_units.update()
         iron_fields.update()
-        buildings.update(particles)
+        for building in buildings:
+            if isinstance(building, Turret):
+                if building.team == Team.GDI:
+                    building.update(
+                        particles=particles,
+                        projectiles=projectiles,
+                        enemy_units=ai_units,
+                    )
+                else:
+                    building.update(
+                        particles=particles,
+                        projectiles=projectiles,
+                        enemy_units=player_units,
+                    )
+            else:
+                building.update(particles=particles)
+
         projectiles.update()
         particles.update()
         handle_collisions(all_units)
         handle_attacks(player_units, all_units, buildings, projectiles, particles)
-        handle_attacks(enemy_units, all_units, buildings, projectiles, particles)
+        handle_attacks(ai_units, all_units, buildings, projectiles, particles)
         handle_projectiles(projectiles, all_units, buildings)
         ai.update()
         fog_of_war.update_visibility(player_units, buildings, Team.GDI)
