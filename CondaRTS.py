@@ -1622,7 +1622,7 @@ if __name__ == "__main__":
             else:
                 building.update(particles=particles)
 
-        projectiles.update()
+        projectiles.update(particles)
         particles.update()
         handle_collisions(all_units)
         handle_attacks(player_units, all_units, buildings, projectiles, particles)
