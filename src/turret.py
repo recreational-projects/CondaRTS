@@ -27,7 +27,7 @@ class Turret(Building):
             x,
             y,
             team,
-            (180, 180, 0) if team == Team.GDI else (180, 0, 0),
+            pg.Color(180, 180, 0) if team == Team.GDI else pg.Color(180, 0, 0),
             500,
         )
         self.attack_range = 180
@@ -84,7 +84,7 @@ class Turret(Building):
                             random.uniform(-1.5, 1.5),
                             random.uniform(-1.5, 1.5),
                             random.randint(6, 10),
-                            (100, 100, 100),
+                            pg.Color(100, 100, 100),
                             20,
                         )
                     )

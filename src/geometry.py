@@ -7,12 +7,16 @@ import pygame as pg
 from src.constants import BUILDING_CONSTRUCTION_RANGE, TILE_SIZE
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from CondaRTS import Building, Team
 
 type Coordinate = tuple[float, float]
 
 
-def _is_within_building_range(*, position: Coordinate, team: Team, buildings) -> bool:
+def _is_within_building_range(
+    *, position: Coordinate, team: Team, buildings: Iterable[Building]
+) -> bool:
     """Return whether `position` is within construction range of team's building."""
     x, y = position
     return any(
@@ -30,7 +34,7 @@ def _collides_with_building(
     *,
     position: Coordinate,
     new_building_cls: type[Building],
-    buildings,
+    buildings: Iterable[Building],
 ) -> bool:
     """Return whether pending building at `position` collides with existing building."""
     new_rect = pg.Rect(position, new_building_cls.SIZE)
@@ -45,7 +49,7 @@ def is_valid_building_position(
     position: Coordinate,
     new_building_cls: type[Building],
     team: Team,
-    buildings,
+    buildings: Iterable[Building],
 ) -> bool:
     return _is_within_building_range(
         position=position,

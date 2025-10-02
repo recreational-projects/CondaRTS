@@ -17,7 +17,9 @@ class Building(GameObject):
     SIZE = 60, 60
     CONSTRUCTION_TIME = 50
 
-    def __init__(self, x: float, y: float, team: Team, color, health: int) -> None:
+    def __init__(
+        self, x: float, y: float, team: Team, color: pg.Color, health: int
+    ) -> None:
         super().__init__(x, y, team)
         self.image = pg.Surface(self.SIZE, pg.SRCALPHA)
         self.rect = self.image.get_rect(topleft=(x, y))
@@ -56,7 +58,7 @@ class Building(GameObject):
                         random.uniform(-3, 3),
                         random.uniform(-3, 3),
                         random.randint(6, 12),
-                        (200, 100, 100),
+                        pg.Color(200, 100, 100),
                         30,
                     )
                 )

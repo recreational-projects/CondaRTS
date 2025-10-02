@@ -10,7 +10,14 @@ if TYPE_CHECKING:
 
 class Particle(pg.sprite.Sprite):
     def __init__(
-        self, x: float, y: float, vx: float, vy: float, size: int, color, lifetime: int
+        self,
+        x: float,
+        y: float,
+        vx: float,
+        vy: float,
+        size: int,
+        color: pg.Color,
+        lifetime: int,
     ) -> None:
         super().__init__()
         self.image: pg.Surface = pg.Surface((size, size), pg.SRCALPHA)

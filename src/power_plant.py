@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pygame as pg
+
 from src.building import Building
 from src.constants import Team
 
@@ -14,6 +16,6 @@ class PowerPlant(Building):
             x,
             y,
             team,
-            (130, 130, 0) if team == Team.GDI else (130, 0, 0),
+            pg.Color(130, 130, 0) if team == Team.GDI else pg.Color(130, 0, 0),
             500,
         )

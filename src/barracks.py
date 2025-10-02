@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pygame as pg
+
 from src.building import Building
 from src.constants import Team
 
@@ -13,6 +15,6 @@ class Barracks(Building):
             x,
             y,
             team,
-            (150, 150, 0) if team == Team.GDI else (150, 0, 0),
+            pg.Color(150, 150, 0) if team == Team.GDI else pg.Color(150, 0, 0),
             600,
         )

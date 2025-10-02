@@ -7,8 +7,12 @@ from typing import TYPE_CHECKING
 import pygame as pg
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from CondaRTS import Team
+    from src.building import Building
     from src.camera import Camera
+    from src.game_object import GameObject
     from src.geometry import Coordinate
 
 
@@ -58,7 +62,9 @@ class FogOfWar:
                     self.explored[x][y] = True
                     self.visible[x][y] = True
 
-    def update_visibility(self, units, buildings, team: Team) -> None:
+    def update_visibility(
+        self, units: Iterable[GameObject], buildings: Iterable[Building], team: Team
+    ) -> None:
         """Reveal tiles within range of `team`'s `unit`s and `buildings`."""
         self.visible = [
             [False] * len(self.explored[0]) for _ in range(len(self.explored))
