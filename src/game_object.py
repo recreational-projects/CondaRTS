@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class GameObject(pg.sprite.Sprite):
     COST = 0
 
-    def __init__(self, x: float, y: float, team: Team) -> None:
+    def __init__(self, *, x: float, y: float, team: Team) -> None:
         super().__init__()
         self.rect: pg.Rect = pg.Rect((x, y), (0, 0))  # Nominal, overridden
         self.image: pg.Surface = pg.Surface((x, y))
@@ -26,7 +26,7 @@ class GameObject(pg.sprite.Sprite):
         self.formation_target: Coordinate | None = None
         self.speed: float = 0
         self.health = 0
-        self.max_health = 0
+        self.max_health = self.health
         self.attack_range = 0
         self.cooldown_timer = 0
         self.selected = False

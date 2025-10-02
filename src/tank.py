@@ -17,7 +17,7 @@ class Tank(GameObject):
     POWER_USAGE = 15
 
     def __init__(self, x: float, y: float, team: Team) -> None:
-        super().__init__(x, y, team)
+        super().__init__(x=x, y=y, team=team)
         self.base_image = pg.Surface((30, 20), pg.SRCALPHA)
         # Draw tank body (front facing east/right)
         pg.draw.rect(self.base_image, (100, 100, 100), (0, 0, 30, 20))  # Hull

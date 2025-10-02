@@ -113,7 +113,7 @@ def handle_attacks(
                     closest_target, min_dist = unit.target_unit, dist
 
             if not closest_target:
-                for target in all_units:
+                for target in (*all_units, *buildings):
                     if target.team != unit.team and target.health > 0:
                         dist = math.sqrt(
                             (unit.rect.centerx - target.rect.centerx) ** 2
@@ -121,15 +121,6 @@ def handle_attacks(
                         )
                         if dist <= unit.attack_range and dist < min_dist:
                             closest_target, min_dist = target, dist
-
-                for building in buildings:
-                    if building.team != unit.team and building.health > 0:
-                        dist = math.sqrt(
-                            (unit.rect.centerx - building.rect.centerx) ** 2
-                            + (unit.rect.centery - building.rect.centery) ** 2
-                        )
-                        if dist <= unit.attack_range and dist < min_dist:
-                            closest_target, min_dist = building, dist
 
             if closest_target:
                 unit.target_unit = closest_target
@@ -271,7 +262,7 @@ class Harvester(GameObject):
     POWER_USAGE = 20
 
     def __init__(self, x: float, y: float, team: Team, hq: Headquarters) -> None:
-        super().__init__(x, y, team)
+        super().__init__(x=x, y=y, team=team)
         self.image = pg.Surface((50, 30), pg.SRCALPHA)
         self.rect = self.image.get_rect(center=(x, y))
         self.speed = 2.5
@@ -395,14 +386,15 @@ class Headquarters(Building):
     BASE_PRODUCTION_TIME = 180
     BASE_POWER = 300
 
-    def __init__(self, x: float, y: float, team: Team) -> None:
+    def __init__(self, *, x: float, y: float, team: Team) -> None:
         super().__init__(
-            x,
-            y,
-            team,
-            GDI_COLOR if team == Team.GDI else NOD_COLOR,
-            1200,
+            x=x,
+            y=y,
+            team=team,
+            color=GDI_COLOR if team == Team.GDI else NOD_COLOR,
         )
+        self.max_health = 1200
+        self.health = self.max_health
         self.iron = 1500
         self.production_queue: list[type[GameObject]] = []
         self.production_timer: float = 0
@@ -514,7 +506,7 @@ class Headquarters(Building):
                     new_units = [
                         Harvester(spawn_x, spawn_y, self.team, self)
                         if unit_cls == Harvester
-                        else unit_cls(spawn_x, spawn_y, self.team)
+                        else unit_cls(x=spawn_x, y=spawn_y, team=self.team)
                     ]
                     formation_positions = calculate_formation_positions(
                         center=(spawn_x, spawn_y),
@@ -534,7 +526,7 @@ class Headquarters(Building):
                     else 0
                 )
 
-    def place_building(self, x: float, y: float, unit_cls) -> None:
+    def place_building(self, x: float, y: float, unit_cls: type[Building]) -> None:
         snapped_position = snap_to_grid((x, y))
         if is_valid_building_position(
             position=snapped_position,
@@ -542,7 +534,7 @@ class Headquarters(Building):
             new_building_cls=unit_cls,
             buildings=buildings,
         ):
-            buildings.add(unit_cls(x, y, self.team))
+            buildings.add(unit_cls(x=x, y=y, team=self.team))
             self.pending_building = None
             self.pending_building_pos = None
             if self.production_queue and self.has_enough_power:
@@ -1415,8 +1407,8 @@ if __name__ == "__main__":
     particles: pg.sprite.Group = pg.sprite.Group()
     selected_units: pg.sprite.Group = pg.sprite.Group()
 
-    gdi_hq = Headquarters(300, 300, Team.GDI)
-    nod_hq = Headquarters(MAP_WIDTH - 300, MAP_HEIGHT - 300, Team.NOD)
+    gdi_hq = Headquarters(x=300, y=300, team=Team.GDI)
+    nod_hq = Headquarters(x=MAP_WIDTH - 300, y=MAP_HEIGHT - 300, team=Team.NOD)
     nod_hq.iron = 1500
     interface = ProductionInterface(hq=gdi_hq)
     console = GameConsole()

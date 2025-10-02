@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import pygame as pg
 
+from src.constants import GDI_COLOR
 from src.game_object import GameObject
 from src.particle import Particle
 
@@ -18,13 +19,16 @@ class Building(GameObject):
     CONSTRUCTION_TIME = 50
 
     def __init__(
-        self, x: float, y: float, team: Team, color: pg.Color, health: int
+        self,
+        *,
+        x: float,
+        y: float,
+        team: Team,
+        color: pg.Color = GDI_COLOR,
     ) -> None:
-        super().__init__(x, y, team)
+        super().__init__(x=x, y=y, team=team)
         self.image = pg.Surface(self.SIZE, pg.SRCALPHA)
         self.rect = self.image.get_rect(topleft=(x, y))
-        self.health = health
-        self.max_health = health
         self.construction_progress = 0
         self.is_seen = False
 
