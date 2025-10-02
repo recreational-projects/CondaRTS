@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 class GameObject(pg.sprite.Sprite):
     COST = 0
+    POWER_USAGE = 0
 
     def __init__(self, *, x: float, y: float, team: Team) -> None:
         super().__init__()
