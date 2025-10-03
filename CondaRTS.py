@@ -48,9 +48,9 @@ if TYPE_CHECKING:
     from src.geometry import Coordinate
 
 
-def handle_collisions(units: Iterable[GameObject]) -> None:
-    for unit in units:
-        for other in units:
+def handle_collisions(all_units: Iterable[GameObject]) -> None:
+    for unit in all_units:
+        for other in all_units:
             if unit != other and unit.rect.colliderect(other.rect):
                 dx, dy = (
                     unit.rect.centerx - other.rect.centerx,
@@ -71,13 +71,13 @@ def handle_collisions(units: Iterable[GameObject]) -> None:
 
 def handle_attacks(
     *,
-    units: Iterable[GameObject],
+    team_units: Iterable[GameObject],
     all_units: Iterable[GameObject],
-    buildings: Iterable[Building],
+    all_buildings: Iterable[Building],
     projectiles: pg.sprite.Group[Projectile],
     particles: pg.sprite.Group[Particle],
 ) -> None:
-    for unit in units:
+    for unit in team_units:
         if isinstance(unit, (Tank, Infantry)) and unit.cooldown_timer == 0:
             closest_target, min_dist = None, float("inf")
             if unit.target_unit and unit.target_unit.health > 0:
@@ -89,7 +89,7 @@ def handle_attacks(
                     closest_target, min_dist = unit.target_unit, dist
 
             if not closest_target:
-                for target in (*all_units, *buildings):
+                for target in (*all_units, *all_buildings):
                     if target.team != unit.team and target.health > 0:
                         dist = math.sqrt(
                             (unit.rect.centerx - target.rect.centerx) ** 2
@@ -165,7 +165,7 @@ def handle_projectiles(
     *,
     projectiles: Iterable[Projectile],
     all_units: Iterable[GameObject],
-    buildings: Iterable[Building],
+    all_buildings: Iterable[Building],
 ) -> None:
     for projectile in projectiles:
         # Check collision with all enemy units and buildings, not just the target
@@ -173,7 +173,7 @@ def handle_projectiles(
             u for u in all_units if u.team != projectile.team and u.health > 0
         ]
         enemy_buildings = [
-            b for b in buildings if b.team != projectile.team and b.health > 0
+            b for b in all_buildings if b.team != projectile.team and b.health > 0
         ]
 
         for e in enemy_units + enemy_buildings:
@@ -206,7 +206,7 @@ def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
         if field.resources > 0 and fog_of_war.is_explored(field.rect.center):
             field.draw(surface_=surface_, camera=camera, font=font_)
 
-    for building in buildings:
+    for building in global_buildings:
         if building.health > 0 and (
             fog_of_war.is_visible(building.rect.center)
             or (building.is_seen and fog_of_war.is_explored(building.rect.center))
@@ -214,7 +214,7 @@ def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
             building.draw(surface_, camera)
 
     fog_of_war.draw(surface_, camera)
-    for unit in all_units:
+    for unit in global_units:
         if unit.team == Team.GDI or fog_of_war.is_visible(unit.rect.center):
             if isinstance(unit, Harvester):
                 unit.draw(surface=surface_, camera=camera, font=font)
@@ -230,7 +230,8 @@ def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
             particle.draw(surface_, camera)
 
     interface.draw(
-        surface_=surface_, own_buildings=[b for b in buildings if b.team == Team.GDI]
+        surface_=surface_,
+        own_buildings=[b for b in global_buildings if b.team == Team.GDI],
     )
     if selecting and select_rect:
         pg.draw.rect(surface_, (255, 255, 255), select_rect, 2)
@@ -310,7 +311,7 @@ class ProductionInterface:
                         b.team == self.hq.team
                         and isinstance(b, WarFactory)
                         and b.health > 0
-                        for b in buildings
+                        for b in global_buildings
                     ),
                 ),
                 (
@@ -319,7 +320,7 @@ class ProductionInterface:
                         b.team == self.hq.team
                         and isinstance(b, Barracks)
                         and b.health > 0
-                        for b in buildings
+                        for b in global_buildings
                     ),
                 ),
                 (
@@ -328,7 +329,7 @@ class ProductionInterface:
                         b.team == self.hq.team
                         and isinstance(b, WarFactory)
                         and b.health > 0
-                        for b in buildings
+                        for b in global_buildings
                     ),
                 ),
             ]
@@ -478,7 +479,7 @@ class ProductionInterface:
             position=world_pos,
             team=self.hq.team,
             new_building_cls=pending_building_cls_,
-            buildings=buildings,
+            buildings=global_buildings,
         ):
             color_ = self.PLACEMENT_VALID_COLOR
 
@@ -727,7 +728,7 @@ class AI:
                         position=snapped_position,
                         team=self.hq.team,
                         new_building_cls=building_cls,
-                        buildings=buildings,
+                        buildings=global_buildings,
                     ):
                         if (
                             closest_field
@@ -980,7 +981,10 @@ class AI:
             x, y = self.find_valid_building_position(self.hq.pending_building)
             self.hq.pending_building_pos = x, y
             self.hq.place_building(
-                x=x, y=y, unit_cls=self.hq.pending_building, all_buildings=buildings
+                x=x,
+                y=y,
+                unit_cls=self.hq.pending_building,
+                all_buildings=global_buildings,
             )
 
     def coordinate_attack(self, surprise: bool = False) -> None:
@@ -1113,9 +1117,9 @@ if __name__ == "__main__":
 
     player_units: pg.sprite.Group = pg.sprite.Group()
     ai_units: pg.sprite.Group = pg.sprite.Group()
-    all_units: pg.sprite.Group = pg.sprite.Group()
+    global_units: pg.sprite.Group = pg.sprite.Group()
     iron_fields: pg.sprite.Group = pg.sprite.Group()
-    buildings: pg.sprite.Group = pg.sprite.Group()
+    global_buildings: pg.sprite.Group = pg.sprite.Group()
     projectiles: pg.sprite.Group = pg.sprite.Group()
     particles: pg.sprite.Group = pg.sprite.Group()
     selected_units: pg.sprite.Group = pg.sprite.Group()
@@ -1146,7 +1150,7 @@ if __name__ == "__main__":
                     TILE_SIZE // 4,
                 )  # Dark spots
 
-    ai = AI(nod_hq, ai_units, all_units, iron_fields.sprites(), buildings)
+    ai = AI(nod_hq, ai_units, global_units, iron_fields.sprites(), global_buildings)
 
     player_units.add(Infantry(350, 300, Team.GDI))
     player_units.add(Infantry(370, 300, Team.GDI))
@@ -1158,8 +1162,8 @@ if __name__ == "__main__":
     ai_units.add(Infantry(2090, 1200, Team.NOD))
     ai_units.add(Harvester(2200, 1300, Team.NOD, nod_hq))
 
-    all_units.add(player_units, ai_units)
-    buildings.add(gdi_hq, nod_hq)
+    global_units.add(player_units, ai_units)
+    global_buildings.add(gdi_hq, nod_hq)
     for _ in range(40):
         iron_fields.add(
             IronField(
@@ -1183,26 +1187,28 @@ if __name__ == "__main__":
                             position=snapped_position,
                             team=gdi_hq.team,
                             new_building_cls=gdi_hq.pending_building,
-                            buildings=buildings,
+                            buildings=global_buildings,
                         ):
                             gdi_hq.place_building(
                                 x=world_x,
                                 y=world_y,
                                 unit_cls=gdi_hq.pending_building,
-                                all_buildings=buildings,
+                                all_buildings=global_buildings,
                             )
                         continue
 
                     if interface.handle_click(
                         event.pos,
-                        own_buildings=[b for b in buildings if b.team == Team.GDI],
+                        own_buildings=[
+                            b for b in global_buildings if b.team == Team.GDI
+                        ],
                     ):
                         continue
 
                     clicked_building = next(
                         (
                             b
-                            for b in buildings
+                            for b in global_buildings
                             if b.team == Team.GDI
                             and camera.apply(b.rect).collidepoint(target_x, target_y)
                         ),
@@ -1222,7 +1228,7 @@ if __name__ == "__main__":
                             gdi_hq.production_timer = gdi_hq.get_production_time(
                                 unit_class=gdi_hq.production_queue[0],
                                 friendly_buildings=[
-                                    b for b in buildings if b.team == Team.GDI
+                                    b for b in global_buildings if b.team == Team.GDI
                                 ],
                             )
                         continue
@@ -1237,7 +1243,7 @@ if __name__ == "__main__":
                     clicked_enemy_unit = next(
                         (
                             u
-                            for u in all_units
+                            for u in global_units
                             if u.team != Team.GDI
                             and camera.apply(u.rect).collidepoint(target_x, target_y)
                         ),
@@ -1246,7 +1252,7 @@ if __name__ == "__main__":
                     clicked_enemy_building = next(
                         (
                             b
-                            for b in buildings
+                            for b in global_buildings
                             if b.team != Team.GDI
                             and camera.apply(b.rect).collidepoint(target_x, target_y)
                         ),
@@ -1315,7 +1321,7 @@ if __name__ == "__main__":
         camera.update(
             selected_units.sprites(), pg.mouse.get_pos(), interface.surface.get_rect()
         )
-        for unit in all_units:
+        for unit in global_units:
             if isinstance(unit, Harvester):
                 if unit.team == Team.GDI:
                     unit.update(enemy_units=ai_units, iron_fields=iron_fields)
@@ -1325,21 +1331,25 @@ if __name__ == "__main__":
                 unit.update()
 
         iron_fields.update()
-        for building in buildings:
+        for building in global_buildings:
             if isinstance(building, Headquarters):
                 if building.team == Team.GDI:
                     building.update(
                         particles=particles,
                         friendly_units=player_units,
-                        friendly_buildings=[b for b in buildings if b.team == Team.GDI],
-                        all_units=all_units,
+                        friendly_buildings=[
+                            b for b in global_buildings if b.team == Team.GDI
+                        ],
+                        all_units=global_units,
                     )
                 else:
                     building.update(
                         particles=particles,
                         friendly_units=ai_units,
-                        friendly_buildings=[b for b in buildings if b.team != Team.GDI],
-                        all_units=all_units,
+                        friendly_buildings=[
+                            b for b in global_buildings if b.team != Team.GDI
+                        ],
+                        all_units=global_units,
                     )
 
             elif isinstance(building, Turret):
@@ -1360,32 +1370,34 @@ if __name__ == "__main__":
 
         projectiles.update(particles)
         particles.update()
-        handle_collisions(all_units)
+        handle_collisions(global_units)
         handle_attacks(
-            units=player_units,
-            all_units=all_units,
-            buildings=buildings,
+            team_units=player_units,
+            all_units=global_units,
+            all_buildings=global_buildings,
             projectiles=projectiles,
             particles=particles,
         )
         handle_attacks(
-            units=ai_units,
-            all_units=all_units,
-            buildings=buildings,
+            team_units=ai_units,
+            all_units=global_units,
+            all_buildings=global_buildings,
             projectiles=projectiles,
             particles=particles,
         )
         handle_projectiles(
-            projectiles=projectiles, all_units=all_units, buildings=buildings
+            projectiles=projectiles,
+            all_units=global_units,
+            all_buildings=global_buildings,
         )
         ai.update(
             own_units=ai_units,
-            own_buildings=[b for b in buildings if b.team != Team.GDI],
+            own_buildings=[b for b in global_buildings if b.team != Team.GDI],
         )
-        fog_of_war.update_visibility(player_units, buildings, Team.GDI)
+        fog_of_war.update_visibility(player_units, global_buildings, Team.GDI)
         draw(surface_=screen, font_=font)
-        for obj in all_units:
-            obj.under_attack = False
+        for unit in global_units:
+            unit.under_attack = False
 
         pg.display.flip()
         clock.tick(60)
