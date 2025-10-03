@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import random
-from dataclasses import dataclass
+from dataclasses import InitVar, dataclass
 from dataclasses import field as dataclass_field
 from typing import TYPE_CHECKING, ClassVar
 
@@ -232,6 +232,7 @@ def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
     interface.draw(
         surface_=surface_,
         own_buildings=[b for b in global_buildings if b.team == Team.GDI],
+        all_buildings=global_buildings,
     )
     if selecting and select_rect:
         pg.draw.rect(surface_, (255, 255, 255), select_rect, 2)
@@ -276,16 +277,18 @@ class ProductionInterface:
 
     hq: Headquarters
     surface: pg.Surface = dataclass_field(init=False)
-    tab_buttons: dict[str, pg.Rect] = dataclass_field(default_factory=dict)
+    tab_buttons: dict[str, pg.Rect] = dataclass_field(init=False, default_factory=dict)
     buy_buttons: dict[
         str,
         dict[type[GameObject], tuple[pg.Rect, Callable]],
-    ] = dataclass_field(default_factory=dict)
+    ] = dataclass_field(init=False, default_factory=dict)
     sell_button: pg.Rect = dataclass_field(init=False)
     current_tab = "Units"
-    production_timer: float | None = None
+    production_timer: float | None = dataclass_field(init=False, default=None)
+    all_buildings: InitVar[Iterable[Building]]
+    font: pg.Font
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, all_buildings: Iterable[Building]) -> None:
         self.surface = pg.Surface((self.WIDTH, SCREEN_HEIGHT - CONSOLE_HEIGHT))
 
         tab_button_base = pg.Rect(
@@ -311,7 +314,7 @@ class ProductionInterface:
                         b.team == self.hq.team
                         and isinstance(b, WarFactory)
                         and b.health > 0
-                        for b in global_buildings
+                        for b in all_buildings
                     ),
                 ),
                 (
@@ -320,7 +323,7 @@ class ProductionInterface:
                         b.team == self.hq.team
                         and isinstance(b, Barracks)
                         and b.health > 0
-                        for b in global_buildings
+                        for b in all_buildings
                     ),
                 ),
                 (
@@ -329,7 +332,7 @@ class ProductionInterface:
                         b.team == self.hq.team
                         and isinstance(b, WarFactory)
                         and b.health > 0
-                        for b in global_buildings
+                        for b in all_buildings
                     ),
                 ),
             ]
@@ -367,7 +370,7 @@ class ProductionInterface:
 
     def _draw_iron(self, *, y_pos: int) -> None:
         self.surface.blit(
-            font.render(
+            self.font.render(
                 f"Iron: {self.hq.iron}",
                 color=pg.Color("white"),
                 antialias=True,
@@ -378,7 +381,7 @@ class ProductionInterface:
     def _draw_power(self, *, y_pos: int) -> None:
         color_ = pg.Color("green") if self.hq.has_enough_power else pg.Color("red")
         self.surface.blit(
-            font.render(
+            self.font.render(
                 f"Power: {self.hq.power_output}/{self.hq.power_usage}",
                 color=color_,
                 antialias=True,
@@ -396,7 +399,7 @@ class ProductionInterface:
             border_radius=self.BUTTON_RADIUS,
         )
         self.surface.blit(
-            font.render(label, color=pg.Color("white"), antialias=True),
+            self.font.render(label, color=pg.Color("white"), antialias=True),
             (rect.x + 10, rect.y + 10),
         )
 
@@ -411,7 +414,7 @@ class ProductionInterface:
             self.surface, buy_fill_color, rect, border_radius=self.BUTTON_RADIUS
         )
         self.surface.blit(
-            font.render(
+            self.font.render(
                 f"{self.unit_button_labels[unit_cls]} ({unit_cls.COST})",
                 color=pg.Color("white"),
                 antialias=True,
@@ -432,7 +435,7 @@ class ProductionInterface:
             border_radius=self.BUTTON_RADIUS,
         )
         self.surface.blit(
-            font.render("Sell", color=pg.Color("white"), antialias=True),
+            self.font.render("Sell", color=pg.Color("white"), antialias=True),
             (self.sell_button.x + 10, self.sell_button.y + 10),
         )
 
@@ -455,7 +458,7 @@ class ProductionInterface:
 
         for i, unit_class in enumerate(self.hq.production_queue[:5]):
             self.surface.blit(
-                font.render(
+                self.font.render(
                     f"{unit_class.__name__} ({unit_class.COST})",
                     color=pg.Color("white"),
                     antialias=True,
@@ -464,7 +467,11 @@ class ProductionInterface:
             )
 
     def _draw_pending_building(
-        self, *, surface_: pg.Surface, mouse_pos: tuple[int, int]
+        self,
+        *,
+        surface_: pg.Surface,
+        mouse_pos: tuple[int, int],
+        all_buildings: Iterable[Building],
     ) -> None:
         if not self.hq.pending_building:
             raise TypeError("No pending building")
@@ -479,7 +486,7 @@ class ProductionInterface:
             position=world_pos,
             team=self.hq.team,
             new_building_cls=pending_building_cls_,
-            buildings=global_buildings,
+            buildings=all_buildings,
         ):
             color_ = self.PLACEMENT_VALID_COLOR
 
@@ -497,7 +504,13 @@ class ProductionInterface:
             ),
         )
 
-    def draw(self, *, surface_: pg.Surface, own_buildings: Iterable[Building]) -> None:
+    def draw(
+        self,
+        *,
+        surface_: pg.Surface,
+        own_buildings: Iterable[Building],
+        all_buildings: Iterable[Building],
+    ) -> None:
         """Draw to the `surface_`."""
         self.surface.fill(self.FILL_COLOR)
         pg.draw.rect(self.surface, self.LINE_COLOR, self.surface.get_rect(), width=2)
@@ -517,7 +530,11 @@ class ProductionInterface:
         self._draw_sell_button(rect=self.sell_button)
 
         if self.hq.pending_building:
-            self._draw_pending_building(surface_=surface_, mouse_pos=pg.mouse.get_pos())
+            self._draw_pending_building(
+                surface_=surface_,
+                mouse_pos=pg.mouse.get_pos(),
+                all_buildings=all_buildings,
+            )
 
         surface_.blit(source=self.surface, dest=(SCREEN_WIDTH - self.WIDTH, 0))
 
@@ -576,7 +593,9 @@ if __name__ == "__main__":
     gdi_hq = Headquarters(x=300, y=300, team=Team.GDI)
     nod_hq = Headquarters(x=MAP_WIDTH - 300, y=MAP_HEIGHT - 300, team=Team.NOD)
     nod_hq.iron = 1500
-    interface = ProductionInterface(hq=gdi_hq)
+    interface = ProductionInterface(
+        hq=gdi_hq, all_buildings=global_buildings, font=font
+    )
     console = GameConsole()
     fog_of_war = FogOfWar(map_size=(MAP_WIDTH, MAP_HEIGHT), tile_size=TILE_SIZE)
 

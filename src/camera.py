@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from src.geometry import Coordinate
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Camera:
     rect: pg.Rect = dataclass_field(init=False)
 

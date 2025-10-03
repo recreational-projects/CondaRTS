@@ -20,8 +20,8 @@ if TYPE_CHECKING:
 class FogOfWar:
     map_size: tuple[int, int]
     tile_size: int
-    explored: list[list[bool]] = dataclass_field(default_factory=list)
-    visible: list[list[bool]] = dataclass_field(default_factory=list)
+    explored: list[list[bool]] = dataclass_field(init=False, default_factory=list)
+    visible: list[list[bool]] = dataclass_field(init=False, default_factory=list)
     surface: pg.Surface = dataclass_field(init=False)
 
     def __post_init__(self) -> None:
