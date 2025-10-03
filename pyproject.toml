@@ -16,12 +16,15 @@ dev = [
 
 [tool.ruff.lint]
 select = [
-    "ANN201",  # Missing return type annotation for public function
-    "ANN204",  # Missing return type annotation for special method
+    "ANN",  # flake8-annotations
     "F",  # Pyflakes
     "I",  # isort
     "TC",  # flake8-type-checking
     "UP",  # pyupgrade
+]
+ignore = [
+    "ANN002",  # Missing type annotation for *args
+    "ANN003",  # Missing type annotation for **kwargs
 ]
 
 [tool.ruff.lint.per-file-ignores]

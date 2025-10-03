@@ -17,7 +17,7 @@ class Infantry(GameObject):
     POWER_USAGE = 5
 
     def __init__(self, x: float, y: float, team: Team) -> None:
-        super().__init__(x, y, team)
+        super().__init__(x=x, y=y, team=team)
         self.image = pg.Surface((16, 16), pg.SRCALPHA)
         self.rect = self.image.get_rect(center=(x, y))
         self.speed = 3.5 if team == Team.GDI else 4

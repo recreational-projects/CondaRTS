@@ -1,0 +1,230 @@
+from __future__ import annotations
+
+import math
+from typing import TYPE_CHECKING
+
+from src.barracks import Barracks
+from src.building import Building
+from src.constants import (
+    GDI_COLOR,
+    NOD_COLOR,
+    Team,
+)
+from src.geometry import (
+    calculate_formation_positions,
+    is_valid_building_position,
+    snap_to_grid,
+)
+from src.harvester import Harvester
+from src.infantry import Infantry
+from src.power_plant import PowerPlant
+from src.tank import Tank
+from src.war_factory import WarFactory
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    import pygame as pg
+
+    from src.camera import Camera
+    from src.game_object import GameObject
+    from src.geometry import Coordinate
+    from src.particle import Particle
+
+
+class Headquarters(Building):
+    COST = 2000
+    SIZE = 80, 80
+    BASE_PRODUCTION_TIME = 180
+    BASE_POWER = 300
+
+    def __init__(self, *, x: float, y: float, team: Team) -> None:
+        super().__init__(
+            x=x,
+            y=y,
+            team=team,
+            color=GDI_COLOR if team == Team.GDI else NOD_COLOR,
+        )
+        self.max_health = 1200
+        self.health = self.max_health
+        self.iron: int = 1500
+        self.production_queue: list[type[GameObject]] = []
+        self.production_timer: float = 0
+        self.pending_building: type[Building] | None = None
+        self.pending_building_pos: Coordinate | None = None
+
+        # Calculated every update():
+        self.power_usage: int = 0
+        self.power_output: int = 0
+
+    def _power_output(self, *, friendly_buildings: Iterable[Building]) -> int:
+        return self.BASE_POWER + sum(
+            b.POWER_OUTPUT
+            for b in friendly_buildings
+            if isinstance(b, PowerPlant) and b.health > 0
+        )
+
+    def _power_usage(
+        self,
+        *,
+        friendly_units: Iterable[GameObject],
+        friendly_buildings: Iterable[Building],
+    ) -> int:
+        return sum(u.POWER_USAGE for u in friendly_units) + sum(
+            b.POWER_USAGE for b in friendly_buildings if b != self
+        )
+
+    @property
+    def has_enough_power(self) -> bool:
+        return self.power_output >= self.power_usage
+
+    def get_production_time(
+        self, *, unit_class: type[GameObject], friendly_buildings: Iterable[Building]
+    ) -> float:
+        if unit_class == Infantry:
+            barracks_count = len(
+                [
+                    b
+                    for b in friendly_buildings
+                    if isinstance(b, Barracks) and b.health > 0
+                ]
+            )
+            return self.BASE_PRODUCTION_TIME * (0.9**barracks_count)
+
+        elif unit_class in [Tank, Harvester]:
+            warfactory_count = len(
+                [
+                    b
+                    for b in friendly_buildings
+                    if isinstance(b, WarFactory) and b.health > 0
+                ]
+            )
+            return self.BASE_PRODUCTION_TIME * (0.9**warfactory_count)
+
+        return self.BASE_PRODUCTION_TIME
+
+    def update(
+        self,
+        particles: pg.sprite.Group[Particle],
+        friendly_units: pg.sprite.Group[GameObject],
+        friendly_buildings: Iterable[Building],
+        all_units: pg.sprite.Group[GameObject],
+        *args,
+        **kwargs,
+    ) -> None:
+        super().update(particles, *args, **kwargs)
+        self.power_output = self._power_output(friendly_buildings=friendly_buildings)
+        self.power_usage = self._power_usage(
+            friendly_units=friendly_units, friendly_buildings=friendly_buildings
+        )
+        if (
+            self.production_queue
+            and not self.production_timer
+            and self.has_enough_power
+        ):
+            self.production_timer = self.get_production_time(
+                unit_class=self.production_queue[0],
+                friendly_buildings=friendly_buildings,
+            )
+
+        if self.production_queue:
+            self.production_timer -= 1 if self.has_enough_power else 0.5
+            if self.production_timer <= 0:
+                unit_cls = self.production_queue.pop(0)
+                if issubclass(unit_cls, Building):
+                    self.pending_building = unit_cls
+                    self.pending_building_pos = None
+
+                else:
+                    spawn_building: Building = self
+                    if unit_cls == Infantry:
+                        barracks = [
+                            b
+                            for b in friendly_buildings
+                            if isinstance(b, Barracks) and b.health > 0
+                        ]
+                        if not barracks:
+                            return
+
+                        spawn_building = min(
+                            barracks,
+                            key=lambda b: math.sqrt(
+                                (b.rect.centerx - self.rect.centerx) ** 2
+                                + (b.rect.centery - self.rect.centery) ** 2
+                            ),
+                        )
+                    elif unit_cls in [Tank, Harvester]:
+                        warfactories = [
+                            b
+                            for b in friendly_buildings
+                            if isinstance(b, WarFactory) and b.health > 0
+                        ]
+                        if not warfactories:
+                            return
+
+                        spawn_building = min(
+                            warfactories,
+                            key=lambda b: math.sqrt(
+                                (b.rect.centerx - self.rect.centerx) ** 2
+                                + (b.rect.centery - self.rect.centery) ** 2
+                            ),
+                        )
+                    spawn_x, spawn_y = (
+                        spawn_building.rect.right + 20,
+                        spawn_building.rect.centery,
+                    )
+                    new_units = [
+                        Harvester(spawn_x, spawn_y, self.team, self)
+                        if unit_cls == Harvester
+                        else unit_cls(x=spawn_x, y=spawn_y, team=self.team)
+                    ]
+                    formation_positions = calculate_formation_positions(
+                        center=(spawn_x, spawn_y),
+                        target=None,
+                        num_units=len(new_units),
+                        direction=0,
+                    )
+                    for unit, pos in zip(new_units, formation_positions):
+                        unit.rect.center = pos
+                        unit.formation_target = pos
+                        friendly_units.add(unit)
+                        all_units.add(unit)
+
+                self.production_timer = (
+                    self.get_production_time(
+                        unit_class=self.production_queue[0],
+                        friendly_buildings=friendly_buildings,
+                    )
+                    if self.production_queue and self.has_enough_power
+                    else 0
+                )
+
+    def place_building(
+        self,
+        *,
+        x: float,
+        y: float,
+        unit_cls: type[Building],
+        all_buildings: pg.sprite.Group[Building],
+    ) -> None:
+        snapped_position = snap_to_grid((x, y))
+        if is_valid_building_position(
+            position=snapped_position,
+            team=self.team,
+            new_building_cls=unit_cls,
+            buildings=all_buildings,
+        ):
+            all_buildings.add(unit_cls(x=x, y=y, team=self.team))
+            self.pending_building = None
+            self.pending_building_pos = None
+            if self.production_queue and self.has_enough_power:
+                self.production_timer = self.get_production_time(
+                    unit_class=self.production_queue[0],
+                    friendly_buildings=[
+                        b for b in all_buildings if b.team == self.team
+                    ],
+                )
+
+    def draw(self, screen: pg.Surface, camera: Camera) -> None:
+        screen.blit(self.image, camera.apply(self.rect).topleft)
+        self.draw_health_bar(screen, camera)

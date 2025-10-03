@@ -16,7 +16,7 @@ class GameConsole:
 
     rect: pg.Rect = dataclass_field(init=False)
     font: pg.Font = dataclass_field(init=False)
-    lines: list[str] = dataclass_field(default_factory=list)
+    lines: list[str] = dataclass_field(init=False, default_factory=list)
     selected_text: str = dataclass_field(init=False)
     scroll_offset: int = dataclass_field(init=False)
 

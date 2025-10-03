@@ -53,7 +53,7 @@ class Projectile(pg.sprite.Sprite):
                             -math.cos(angle) * random.uniform(0.5, 1.5),
                             -math.sin(angle) * random.uniform(0.5, 1.5),
                             5,
-                            (255, 255, 150),
+                            pg.Color(255, 255, 150),
                             15,
                         )
                     )
@@ -70,7 +70,7 @@ class Projectile(pg.sprite.Sprite):
                             random.uniform(-2, 2),
                             random.uniform(-2, 2),
                             6,
-                            (255, 100, 0),
+                            pg.Color(255, 100, 0),
                             15,
                         )
                     )  # Orange explosion

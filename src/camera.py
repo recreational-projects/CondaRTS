@@ -15,10 +15,13 @@ from src.constants import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from src.game_object import GameObject
     from src.geometry import Coordinate
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Camera:
     rect: pg.Rect = dataclass_field(init=False)
 
@@ -26,7 +29,10 @@ class Camera:
         self.rect = pg.Rect(0, 0, SCREEN_WIDTH - 200, SCREEN_HEIGHT - CONSOLE_HEIGHT)
 
     def update(
-        self, selected_units, mouse_pos: Coordinate, interface_rect: pg.Rect
+        self,
+        selected_units: Sequence[GameObject],
+        mouse_pos: Coordinate,
+        interface_rect: pg.Rect,
     ) -> None:
         mx, my = mouse_pos
         if interface_rect.collidepoint(mx, my) or my > SCREEN_HEIGHT - CONSOLE_HEIGHT:

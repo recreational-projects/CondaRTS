@@ -22,14 +22,15 @@ class Turret(Building):
     POWER_USAGE = 25
     SIZE = 50, 50
 
-    def __init__(self, x: float, y: float, team: Team) -> None:
+    def __init__(self, *, x: float, y: float, team: Team) -> None:
         super().__init__(
-            x,
-            y,
-            team,
-            (180, 180, 0) if team == Team.GDI else (180, 0, 0),
-            500,
+            x=x,
+            y=y,
+            team=team,
+            color=pg.Color(180, 180, 0) if team == Team.GDI else pg.Color(180, 0, 0),
         )
+        self.max_health = 500
+        self.health = self.max_health
         self.attack_range = 180
         self.attack_damage = 15
         self.attack_cooldown = 25
@@ -84,7 +85,7 @@ class Turret(Building):
                             random.uniform(-1.5, 1.5),
                             random.uniform(-1.5, 1.5),
                             random.randint(6, 10),
-                            (100, 100, 100),
+                            pg.Color(100, 100, 100),
                             20,
                         )
                     )

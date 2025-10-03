@@ -2,19 +2,21 @@ from __future__ import annotations
 
 import math
 import random
-from dataclasses import dataclass
+from dataclasses import InitVar, dataclass
 from dataclasses import field as dataclass_field
 from typing import TYPE_CHECKING, ClassVar
 
 import pygame as pg
 
+from src.ai import AI
 from src.barracks import Barracks
-from src.building import Building
 from src.camera import Camera
 from src.constants import (
     CONSOLE_HEIGHT,
+    GDI_COLOR,
     MAP_HEIGHT,
     MAP_WIDTH,
+    NOD_COLOR,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     TILE_SIZE,
@@ -22,8 +24,13 @@ from src.constants import (
 )
 from src.fog_of_war import FogOfWar
 from src.game_console import GameConsole
-from src.game_object import GameObject
-from src.geometry import is_valid_building_position, snap_to_grid
+from src.geometry import (
+    calculate_formation_positions,
+    is_valid_building_position,
+    snap_to_grid,
+)
+from src.harvester import Harvester
+from src.headquarters import Headquarters
 from src.infantry import Infantry
 from src.iron_field import IronField
 from src.particle import Particle
@@ -35,42 +42,15 @@ from src.turret import Turret
 from src.war_factory import WarFactory
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
-    from src.geometry import Coordinate
-
-GDI_COLOR = (200, 150, 0)  # Brighter yellow for GDI
-NOD_COLOR = (200, 0, 0)  # Brighter red for NOD
+    from src.building import Building
+    from src.game_object import GameObject
 
 
-def calculate_formation_positions(
-    center: Coordinate, target, num_units: int, direction=None
-) -> list[Coordinate]:
-    if num_units == 0:
-        return []
-    max_cols, max_rows = 5, 4
-    spacing = 20
-    positions = []
-    if direction is None and target:
-        dx, dy = target[0] - center[0], target[1] - center[1]
-        angle = math.atan2(dy, dx) if dx != 0 or dy != 0 else 0
-    else:
-        angle = direction if direction is not None else 0
-    cos_a, sin_a = math.cos(angle), math.sin(angle)
-    for i in range(min(num_units, max_cols * max_rows)):
-        row = i // max_cols
-        col = i % max_cols
-        offset_x = (col - (max_cols - 1) / 2) * spacing
-        offset_y = (row - (max_rows - 1) / 2) * spacing
-        rotated_x = offset_x * cos_a - offset_y * sin_a
-        rotated_y = offset_x * sin_a + offset_y * cos_a
-        positions.append((center[0] + rotated_x, center[1] + rotated_y))
-    return positions
-
-
-def handle_collisions(units) -> None:
-    for unit in units:
-        for other in units:
+def handle_collisions(all_units: Iterable[GameObject]) -> None:
+    for unit in all_units:
+        for other in all_units:
             if unit != other and unit.rect.colliderect(other.rect):
                 dx, dy = (
                     unit.rect.centerx - other.rect.centerx,
@@ -89,8 +69,15 @@ def handle_collisions(units) -> None:
                     other.rect.y -= push * dy / dist
 
 
-def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
-    for unit in units:
+def handle_attacks(
+    *,
+    team_units: Iterable[GameObject],
+    all_units: Iterable[GameObject],
+    all_buildings: Iterable[Building],
+    projectiles: pg.sprite.Group[Projectile],
+    particles: pg.sprite.Group[Particle],
+) -> None:
+    for unit in team_units:
         if isinstance(unit, (Tank, Infantry)) and unit.cooldown_timer == 0:
             closest_target, min_dist = None, float("inf")
             if unit.target_unit and unit.target_unit.health > 0:
@@ -102,7 +89,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                     closest_target, min_dist = unit.target_unit, dist
 
             if not closest_target:
-                for target in all_units:
+                for target in (*all_units, *all_buildings):
                     if target.team != unit.team and target.health > 0:
                         dist = math.sqrt(
                             (unit.rect.centerx - target.rect.centerx) ** 2
@@ -110,15 +97,6 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                         )
                         if dist <= unit.attack_range and dist < min_dist:
                             closest_target, min_dist = target, dist
-
-                for building in buildings:
-                    if building.team != unit.team and building.health > 0:
-                        dist = math.sqrt(
-                            (unit.rect.centerx - building.rect.centerx) ** 2
-                            + (unit.rect.centery - building.rect.centery) ** 2
-                        )
-                        if dist <= unit.attack_range and dist < min_dist:
-                            closest_target, min_dist = building, dist
 
             if closest_target:
                 unit.target_unit = closest_target
@@ -156,7 +134,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                                 random.uniform(-1.5, 1.5),
                                 random.uniform(-1.5, 1.5),
                                 random.randint(6, 10),
-                                (100, 100, 100),
+                                pg.Color(100, 100, 100),
                                 20,
                             )
                         )
@@ -173,7 +151,7 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                                 random.uniform(-1, 1),
                                 random.uniform(-1, 1),
                                 4,
-                                (255, 200, 100),
+                                pg.Color(255, 200, 100),
                                 10,
                             )
                         )
@@ -183,14 +161,19 @@ def handle_attacks(units, all_units, buildings, projectiles, particles) -> None:
                 unit.cooldown_timer = unit.attack_cooldown
 
 
-def handle_projectiles(projectiles, all_units, buildings) -> None:
+def handle_projectiles(
+    *,
+    projectiles: Iterable[Projectile],
+    all_units: Iterable[GameObject],
+    all_buildings: Iterable[Building],
+) -> None:
     for projectile in projectiles:
         # Check collision with all enemy units and buildings, not just the target
         enemy_units = [
             u for u in all_units if u.team != projectile.team and u.health > 0
         ]
         enemy_buildings = [
-            b for b in buildings if b.team != projectile.team and b.health > 0
+            b for b in all_buildings if b.team != projectile.team and b.health > 0
         ]
 
         for e in enemy_units + enemy_buildings:
@@ -205,7 +188,7 @@ def handle_projectiles(projectiles, all_units, buildings) -> None:
                             random.uniform(-2, 2),
                             random.uniform(-2, 2),
                             6,
-                            (255, 200, 100),
+                            pg.Color(255, 200, 100),
                             15,
                         )
                     )
@@ -223,7 +206,7 @@ def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
         if field.resources > 0 and fog_of_war.is_explored(field.rect.center):
             field.draw(surface_=surface_, camera=camera, font=font_)
 
-    for building in buildings:
+    for building in global_buildings:
         if building.health > 0 and (
             fog_of_war.is_visible(building.rect.center)
             or (building.is_seen and fog_of_war.is_explored(building.rect.center))
@@ -231,9 +214,12 @@ def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
             building.draw(surface_, camera)
 
     fog_of_war.draw(surface_, camera)
-    for unit in all_units:
+    for unit in global_units:
         if unit.team == Team.GDI or fog_of_war.is_visible(unit.rect.center):
-            unit.draw(surface_, camera)
+            if isinstance(unit, Harvester):
+                unit.draw(surface=surface_, camera=camera, font=font)
+            else:
+                unit.draw(surface_, camera)
 
     for projectile in projectiles:
         if projectile.team == Team.GDI or fog_of_war.is_visible(projectile.rect.center):
@@ -243,300 +229,15 @@ def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
         if fog_of_war.is_visible(particle.rect.center):
             particle.draw(surface_, camera)
 
-    interface.draw(surface_)
+    interface.draw(
+        surface_=surface_,
+        own_buildings=[b for b in global_buildings if b.team == Team.GDI],
+        all_buildings=global_buildings,
+    )
     if selecting and select_rect:
         pg.draw.rect(surface_, (255, 255, 255), select_rect, 2)
 
     console.draw(surface_)
-
-
-class Harvester(GameObject):
-    COST = 800
-    POWER_USAGE = 20
-
-    def __init__(
-        self, x: float, y: float, team: Team, headquarters: Headquarters
-    ) -> None:
-        super().__init__(x, y, team)
-        self.image = pg.Surface((50, 30), pg.SRCALPHA)
-        self.rect = self.image.get_rect(center=(x, y))
-        self.speed = 2.5
-        self.health = 300
-        self.max_health = self.health
-        self.capacity = 100
-        self.iron = 0
-        self.headquarters = headquarters
-        self.state = "moving_to_field"
-        self.target_field: IronField | None = None
-        self.harvest_time = 40
-        self.attack_range = 50
-        self.attack_damage = 10
-        self.attack_cooldown = 30
-
-        # Draw harvester as a truck
-        pg.draw.rect(self.image, (120, 120, 120), (0, 0, 50, 30))  # Body
-        pg.draw.rect(self.image, (100, 100, 100), (5, 5, 40, 20))  # Cargo area
-        pg.draw.circle(self.image, (50, 50, 50), (10, 30), 5)  # Wheel 1
-        pg.draw.circle(self.image, (50, 50, 50), (40, 30), 5)  # Wheel 2
-
-    def update(self) -> None:
-        super().update()
-        if self.cooldown_timer == 0:
-            closest_target, min_dist = None, float("inf")
-            for target in all_units:
-                if (
-                    target.team != self.team
-                    and target.health > 0
-                    and isinstance(target, Infantry)
-                ):
-                    dist = math.sqrt(
-                        (self.rect.centerx - target.rect.centerx) ** 2
-                        + (self.rect.centery - target.rect.centery) ** 2
-                    )
-                    if dist < self.attack_range and dist < min_dist:
-                        closest_target, min_dist = target, dist
-            if closest_target:
-                closest_target.health -= self.attack_damage
-                if closest_target.health <= 0:
-                    closest_target.kill()
-                self.cooldown_timer = self.attack_cooldown
-
-        if self.state == "moving_to_field":
-            if not self.target_field or self.target_field.resources <= 0:
-                rich_fields = [f for f in iron_fields if f.resources >= 1000]
-                if rich_fields:
-                    self.target_field = min(
-                        rich_fields,
-                        key=lambda f: math.sqrt(
-                            (self.rect.centerx - f.rect.centerx) ** 2
-                            + (self.rect.centery - f.rect.centery) ** 2
-                        ),
-                    )
-                else:
-                    self.target_field = min(
-                        iron_fields,
-                        key=lambda f: math.sqrt(
-                            (self.rect.centerx - f.rect.centerx) ** 2
-                            + (self.rect.centery - f.rect.centery) ** 2
-                        ),
-                        default=None,
-                    )
-            if self.target_field:
-                self.target = self.target_field.rect.center
-                if (
-                    math.sqrt(
-                        (self.rect.centerx - self.target[0]) ** 2
-                        + (self.rect.centery - self.target[1]) ** 2
-                    )
-                    < 30
-                ):
-                    self.state = "harvesting"
-                    self.target = None
-                    self.harvest_time = 40
-        elif self.state == "harvesting":
-            if self.harvest_time > 0:
-                self.harvest_time -= 1
-            else:
-                if not self.target_field:
-                    raise TypeError(
-                        "No target field"
-                    )  # Temporary handling, review later
-
-                harvested = min(self.target_field.resources, self.capacity)
-                self.iron += harvested
-                self.target_field.resources -= harvested
-                self.state = "returning"
-                self.target = self.headquarters.rect.center
-
-        elif self.state == "returning":
-            if not self.target:
-                raise TypeError("No target field")  # Temporary handling, review later
-
-            if (
-                math.sqrt(
-                    (self.rect.centerx - self.target[0]) ** 2
-                    + (self.rect.centery - self.target[1]) ** 2
-                )
-                < 30
-            ):
-                self.headquarters.iron += self.iron
-                self.iron = 0
-                self.state = "moving_to_field"
-                self.target = None
-
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
-        if self.selected:
-            pg.draw.rect(screen, (255, 255, 255), camera.apply(self.rect), 2)
-        self.draw_health_bar(screen, camera)
-        if self.iron > 0:
-            screen.blit(
-                font.render(f"Iron: {self.iron}", True, (255, 255, 255)),
-                (camera.apply(self.rect).x, camera.apply(self.rect).y - 35),
-            )
-
-
-class Headquarters(Building):
-    COST = 2000
-    SIZE = 80, 80
-    BASE_PRODUCTION_TIME = 180
-    BASE_POWER = 300
-
-    def __init__(self, x: float, y: float, team: Team) -> None:
-        super().__init__(
-            x,
-            y,
-            team,
-            GDI_COLOR if team == Team.GDI else NOD_COLOR,
-            1200,
-        )
-        self.iron = 1500
-        self.production_queue: list[type[GameObject]] = []
-        self.production_timer: float = 0
-        self.pending_building: type[Building] | None = None
-        self.pending_building_pos: Coordinate | None = None
-
-    @property
-    def power_output(self) -> int:
-        return self.BASE_POWER + sum(
-            b.POWER_OUTPUT
-            for b in buildings
-            if b.team == self.team and isinstance(b, PowerPlant) and b.health > 0
-        )
-
-    @property
-    def power_usage(self) -> int:
-        return sum(u.POWER_USAGE for u in all_units if u.team == self.team) + sum(
-            b.POWER_USAGE for b in buildings if b.team == self.team and b != self
-        )
-
-    @property
-    def has_enough_power(self) -> bool:
-        return self.power_output >= self.power_usage
-
-    def get_production_time(self, unit_class: type[GameObject]) -> float:
-        if unit_class == Infantry:
-            barracks_count = len(
-                [
-                    b
-                    for b in buildings
-                    if b.team == self.team and isinstance(b, Barracks) and b.health > 0
-                ]
-            )
-            return self.BASE_PRODUCTION_TIME * (0.9**barracks_count)
-
-        elif unit_class in [Tank, Harvester]:
-            warfactory_count = len(
-                [
-                    b
-                    for b in buildings
-                    if b.team == self.team
-                    and isinstance(b, WarFactory)
-                    and b.health > 0
-                ]
-            )
-            return self.BASE_PRODUCTION_TIME * (0.9**warfactory_count)
-
-        return self.BASE_PRODUCTION_TIME
-
-    def update(self, *args, **kwargs) -> None:
-        super().update(*args, **kwargs)
-        if (
-            self.production_queue
-            and not self.production_timer
-            and self.has_enough_power
-        ):
-            self.production_timer = self.get_production_time(self.production_queue[0])
-
-        if self.production_queue:
-            self.production_timer -= 1 if self.has_enough_power else 0.5
-            if self.production_timer <= 0:
-                unit_cls = self.production_queue.pop(0)
-                if issubclass(unit_cls, Building):
-                    self.pending_building = unit_cls
-                    self.pending_building_pos = None
-
-                else:
-                    spawn_building: Building = self
-                    if unit_cls == Infantry:
-                        barracks = [
-                            b
-                            for b in buildings
-                            if b.team == self.team
-                            and isinstance(b, Barracks)
-                            and b.health > 0
-                        ]
-                        if not barracks:
-                            return
-
-                        spawn_building = min(
-                            barracks,
-                            key=lambda b: math.sqrt(
-                                (b.rect.centerx - self.rect.centerx) ** 2
-                                + (b.rect.centery - self.rect.centery) ** 2
-                            ),
-                        )
-                    elif unit_cls in [Tank, Harvester]:
-                        warfactories = [
-                            b
-                            for b in buildings
-                            if b.team == self.team
-                            and isinstance(b, WarFactory)
-                            and b.health > 0
-                        ]
-                        if not warfactories:
-                            return
-
-                        spawn_building = min(
-                            warfactories,
-                            key=lambda b: math.sqrt(
-                                (b.rect.centerx - self.rect.centerx) ** 2
-                                + (b.rect.centery - self.rect.centery) ** 2
-                            ),
-                        )
-                    spawn_x, spawn_y = (
-                        spawn_building.rect.right + 20,
-                        spawn_building.rect.centery,
-                    )
-                    new_units = [
-                        Harvester(spawn_x, spawn_y, self.team, self)
-                        if unit_cls == Harvester
-                        else unit_cls(spawn_x, spawn_y, self.team)
-                    ]
-                    formation_positions = calculate_formation_positions(
-                        (spawn_x, spawn_y), None, len(new_units), direction=0
-                    )
-                    for unit, pos in zip(new_units, formation_positions):
-                        unit.rect.center = pos
-                        unit.formation_target = pos
-                        (player_units if self.team == Team.GDI else ai_units).add(unit)
-                        all_units.add(unit)
-
-                self.production_timer = (
-                    self.get_production_time(self.production_queue[0])
-                    if self.production_queue and self.has_enough_power
-                    else 0
-                )
-
-    def place_building(self, x: float, y: float, unit_class) -> None:
-        snapped_position = snap_to_grid((x, y))
-        if is_valid_building_position(
-            position=snapped_position,
-            team=self.team,
-            new_building_cls=unit_class,
-            buildings=buildings,
-        ):
-            buildings.add(unit_class(x, y, self.team))
-            self.pending_building = None
-            self.pending_building_pos = None
-            if self.production_queue and self.has_enough_power:
-                self.production_timer = self.get_production_time(
-                    self.production_queue[0]
-                )
-
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
-        self.draw_health_bar(screen, camera)
 
 
 @dataclass(kw_only=True)
@@ -574,18 +275,20 @@ class ProductionInterface:
 
     _BUTTON_WIDTH = WIDTH - 2 * MARGIN_X
 
-    headquarters: Headquarters
+    hq: Headquarters
     surface: pg.Surface = dataclass_field(init=False)
-    tab_buttons: dict[str, pg.Rect] = dataclass_field(default_factory=dict)
+    tab_buttons: dict[str, pg.Rect] = dataclass_field(init=False, default_factory=dict)
     buy_buttons: dict[
         str,
         dict[type[GameObject], tuple[pg.Rect, Callable]],
-    ] = dataclass_field(default_factory=dict)
+    ] = dataclass_field(init=False, default_factory=dict)
     sell_button: pg.Rect = dataclass_field(init=False)
     current_tab = "Units"
-    production_timer: float | None = None
+    production_timer: float | None = dataclass_field(init=False, default=None)
+    all_buildings: InitVar[Iterable[Building]]
+    font: pg.Font
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, all_buildings: Iterable[Building]) -> None:
         self.surface = pg.Surface((self.WIDTH, SCREEN_HEIGHT - CONSOLE_HEIGHT))
 
         tab_button_base = pg.Rect(
@@ -608,28 +311,28 @@ class ProductionInterface:
                 (
                     Tank,
                     lambda: any(
-                        b.team == self.headquarters.team
+                        b.team == self.hq.team
                         and isinstance(b, WarFactory)
                         and b.health > 0
-                        for b in buildings
+                        for b in all_buildings
                     ),
                 ),
                 (
                     Infantry,
                     lambda: any(
-                        b.team == self.headquarters.team
+                        b.team == self.hq.team
                         and isinstance(b, Barracks)
                         and b.health > 0
-                        for b in buildings
+                        for b in all_buildings
                     ),
                 ),
                 (
                     Harvester,
                     lambda: any(
-                        b.team == self.headquarters.team
+                        b.team == self.hq.team
                         and isinstance(b, WarFactory)
                         and b.health > 0
-                        for b in buildings
+                        for b in all_buildings
                     ),
                 ),
             ]
@@ -667,8 +370,8 @@ class ProductionInterface:
 
     def _draw_iron(self, *, y_pos: int) -> None:
         self.surface.blit(
-            font.render(
-                f"Iron: {self.headquarters.iron}",
+            self.font.render(
+                f"Iron: {self.hq.iron}",
                 color=pg.Color("white"),
                 antialias=True,
             ),
@@ -676,13 +379,10 @@ class ProductionInterface:
         )
 
     def _draw_power(self, *, y_pos: int) -> None:
-        color_ = (
-            pg.Color("green") if self.headquarters.has_enough_power else pg.Color("red")
-        )
+        color_ = pg.Color("green") if self.hq.has_enough_power else pg.Color("red")
         self.surface.blit(
-            font.render(
-                f"Power: {self.headquarters.power_output}"
-                f"/{self.headquarters.power_usage}",
+            self.font.render(
+                f"Power: {self.hq.power_output}/{self.hq.power_usage}",
                 color=color_,
                 antialias=True,
             ),
@@ -699,14 +399,14 @@ class ProductionInterface:
             border_radius=self.BUTTON_RADIUS,
         )
         self.surface.blit(
-            font.render(label, color=pg.Color("white"), antialias=True),
+            self.font.render(label, color=pg.Color("white"), antialias=True),
             (rect.x + 10, rect.y + 10),
         )
 
     def _draw_buy_button(
         self, *, rect: pg.Rect, unit_cls: type[GameObject], req_fn: Callable
     ) -> None:
-        can_produce = self.headquarters.iron >= unit_cls.COST and req_fn
+        can_produce = self.hq.iron >= unit_cls.COST and req_fn
         buy_fill_color = (
             self.ACTION_ALLOWED_COLOR if can_produce else self.ACTION_BLOCKED_COLOR
         )
@@ -714,7 +414,7 @@ class ProductionInterface:
             self.surface, buy_fill_color, rect, border_radius=self.BUTTON_RADIUS
         )
         self.surface.blit(
-            font.render(
+            self.font.render(
                 f"{self.unit_button_labels[unit_cls]} ({unit_cls.COST})",
                 color=pg.Color("white"),
                 antialias=True,
@@ -735,18 +435,16 @@ class ProductionInterface:
             border_radius=self.BUTTON_RADIUS,
         )
         self.surface.blit(
-            font.render("Sell", color=pg.Color("white"), antialias=True),
+            self.font.render("Sell", color=pg.Color("white"), antialias=True),
             (self.sell_button.x + 10, self.sell_button.y + 10),
         )
 
-    def _draw_production_queue(self, y_pos: int) -> None:
-        if self.headquarters.production_timer and self.headquarters.production_queue:
-            progress = (
-                1
-                - self.headquarters.production_timer
-                / self.headquarters.get_production_time(
-                    self.headquarters.production_queue[0]
-                )
+    def _draw_production_queue(
+        self, *, y_pos: int, own_buildings: Iterable[Building]
+    ) -> None:
+        if self.hq.production_timer and self.hq.production_queue:
+            progress = 1 - self.hq.production_timer / self.hq.get_production_time(
+                unit_class=self.hq.production_queue[0], friendly_buildings=own_buildings
             )
             draw_progress_bar(
                 surface=self.surface,
@@ -758,9 +456,9 @@ class ProductionInterface:
                 progress=progress,
             )
 
-        for i, unit_class in enumerate(self.headquarters.production_queue[:5]):
+        for i, unit_class in enumerate(self.hq.production_queue[:5]):
             self.surface.blit(
-                font.render(
+                self.font.render(
                     f"{unit_class.__name__} ({unit_class.COST})",
                     color=pg.Color("white"),
                     antialias=True,
@@ -769,24 +467,26 @@ class ProductionInterface:
             )
 
     def _draw_pending_building(
-        self, *, surface_: pg.Surface, mouse_pos: tuple[int, int]
+        self,
+        *,
+        surface_: pg.Surface,
+        mouse_pos: tuple[int, int],
+        all_buildings: Iterable[Building],
     ) -> None:
-        if not self.headquarters.pending_building:
+        if not self.hq.pending_building:
             raise TypeError("No pending building")
 
-        pending_building_cls_ = self.headquarters.pending_building
+        pending_building_cls_ = self.hq.pending_building
         world_pos = snap_to_grid(camera.screen_to_world(mouse_pos))
         temp_surface = pg.Surface(pending_building_cls_.SIZE, pg.SRCALPHA)
-        temp_surface.fill(
-            GDI_COLOR if self.headquarters.team == Team.GDI else NOD_COLOR
-        )
+        temp_surface.fill(GDI_COLOR if self.hq.team == Team.GDI else NOD_COLOR)
         temp_surface.set_alpha(100)
         color_ = self.PLACEMENT_INVALID_COLOR
         if is_valid_building_position(
             position=world_pos,
-            team=self.headquarters.team,
+            team=self.hq.team,
             new_building_cls=pending_building_cls_,
-            buildings=buildings,
+            buildings=all_buildings,
         ):
             color_ = self.PLACEMENT_VALID_COLOR
 
@@ -804,7 +504,13 @@ class ProductionInterface:
             ),
         )
 
-    def draw(self, surface_: pg.Surface) -> None:
+    def draw(
+        self,
+        *,
+        surface_: pg.Surface,
+        own_buildings: Iterable[Building],
+        all_buildings: Iterable[Building],
+    ) -> None:
         """Draw to the `surface_`."""
         self.surface.fill(self.FILL_COLOR)
         pg.draw.rect(self.surface, self.LINE_COLOR, self.surface.get_rect(), width=2)
@@ -818,15 +524,23 @@ class ProductionInterface:
             rect, req_fn = info
             self._draw_buy_button(rect=rect, unit_cls=unit_cls, req_fn=req_fn)
 
-        self._draw_production_queue(y_pos=self.PRODUCTION_QUEUE_POS_Y)
+        self._draw_production_queue(
+            y_pos=self.PRODUCTION_QUEUE_POS_Y, own_buildings=own_buildings
+        )
         self._draw_sell_button(rect=self.sell_button)
 
-        if self.headquarters.pending_building:
-            self._draw_pending_building(surface_=surface_, mouse_pos=pg.mouse.get_pos())
+        if self.hq.pending_building:
+            self._draw_pending_building(
+                surface_=surface_,
+                mouse_pos=pg.mouse.get_pos(),
+                all_buildings=all_buildings,
+            )
 
         surface_.blit(source=self.surface, dest=(SCREEN_WIDTH - self.WIDTH, 0))
 
-    def handle_click(self, screen_pos: tuple[int, int]) -> bool:
+    def handle_click(
+        self, screen_pos: tuple[int, int], own_buildings: Iterable[Building]
+    ) -> bool:
         local_pos = self._local_pos(screen_pos)
         global selected_building
         for tab_name, rect in self.tab_buttons.items():
@@ -834,567 +548,31 @@ class ProductionInterface:
                 self.current_tab = tab_name
                 return True
 
-        if len(self.headquarters.production_queue) >= self.MAX_PRODUCTION_QUEUE_LENGTH:
+        if len(self.hq.production_queue) >= self.MAX_PRODUCTION_QUEUE_LENGTH:
             return False
 
         for unit_cls, info in self.buy_buttons[self.current_tab].items():
             rect, req_fn = info
             if (
                 rect.collidepoint(local_pos)
-                and self.headquarters.iron >= unit_cls.COST
+                and self.hq.iron >= unit_cls.COST
                 and req_fn()
             ):
-                self.headquarters.production_queue.append(unit_cls)
-                self.headquarters.iron -= unit_cls.COST
-                if not self.headquarters.production_timer:
-                    self.production_timer = self.headquarters.get_production_time(
-                        unit_cls
+                self.hq.production_queue.append(unit_cls)
+                self.hq.iron -= unit_cls.COST
+                if not self.hq.production_timer:
+                    self.production_timer = self.hq.get_production_time(
+                        unit_class=unit_cls, friendly_buildings=own_buildings
                     )
                 return True
 
         if self.sell_button.collidepoint(local_pos) and selected_building:
-            self.headquarters.iron += selected_building.COST // 2
+            self.hq.iron += selected_building.COST // 2
             selected_building.kill()
             selected_building = None
             return True
 
         return False
-
-
-class AI:
-    def __init__(
-        self,
-        headquarters: Headquarters,
-        units_group,
-        all_units_group,
-        iron_fields,
-        buildings,
-    ) -> None:
-        self.headquarters = headquarters
-        self.units = units_group
-        self.all_units = all_units_group
-        self.iron_fields = iron_fields
-        self.buildings = buildings
-        self.timer = 0
-        self.action_interval = 50
-        self.wave_timer = 0
-        self.wave_interval = random.randint(150, 250)
-        self.wave_number = 0
-        self.max_wave_size = 25
-        self.target_ratio = {"Harvester": 4, "Infantry": 6, "Tank": 3, "Turret": 3}
-        self.scale_factor = 1.8
-        self.state = "Build Up"
-        self.player_base_size = 0
-        self.defense_cooldown = 0
-        self.scout_targets: list[Coordinate] = []
-        self.iron_income_rate: float = 0
-        self.last_scout_update = 0
-        self.scout_interval = 200
-        self.surprise_attack_cooldown = 0
-
-    def evaluate_game_state(self) -> dict[str, int]:
-        self.player_base_size = len(
-            [u for u in self.all_units if u.team == Team.GDI]
-        ) + len([b for b in self.buildings if b.team == Team.GDI])
-        player_harvesters = len(
-            [
-                u
-                for u in self.all_units
-                if u.team == Team.GDI and isinstance(u, Harvester)
-            ]
-        )
-        player_tanks = len(
-            [u for u in self.all_units if u.team == Team.GDI and isinstance(u, Tank)]
-        )
-        player_infantry = len(
-            [
-                u
-                for u in self.all_units
-                if u.team == Team.GDI and isinstance(u, Infantry)
-            ]
-        )
-        player_turrets = len(
-            [b for b in self.buildings if b.team == Team.GDI and isinstance(b, Turret)]
-        )
-        self.iron_income_rate = (
-            sum(h.iron for h in self.units if isinstance(h, Harvester))
-            / max(1, len([h for h in self.units if isinstance(h, Harvester)]))
-            * 60
-            / 40
-        )
-        self.state = (
-            "Broke"
-            if self.headquarters.iron < 300 or self.iron_income_rate < 50
-            else "Attacked"
-            if self.headquarters.health < self.headquarters.max_health * 0.6
-            or self.defense_cooldown > 0
-            else "Threatened"
-            if any(
-                u.team == Team.GDI
-                and math.sqrt(
-                    (u.rect.centerx - self.headquarters.rect.centerx) ** 2
-                    + (u.rect.centery - self.headquarters.rect.centery) ** 2
-                )
-                < 500
-                for u in self.all_units
-            )
-            else "Aggressive"
-            if self.wave_number >= 2 or self.player_base_size > 8
-            else "Build Up"
-        )
-        return {
-            "player_harvesters": player_harvesters,
-            "player_tanks": player_tanks,
-            "player_infantry": player_infantry,
-            "player_turrets": player_turrets,
-        }
-
-    def update_scouting(self) -> None:
-        if self.last_scout_update <= 0:
-            if not self.scout_targets:
-                self.scout_targets = [
-                    (f.rect.centerx, f.rect.centery) for f in self.iron_fields
-                ] + [(MAP_WIDTH // 2, MAP_HEIGHT // 2)]
-                gdi_hq = next(
-                    (
-                        b
-                        for b in self.buildings
-                        if b.team == Team.GDI and isinstance(b, Headquarters)
-                    ),
-                    None,
-                )
-                if gdi_hq:
-                    self.scout_targets.append(gdi_hq.rect.center)
-            for scout in [
-                u for u in self.units if isinstance(u, Infantry) and not u.target
-            ][:3]:
-                if self.scout_targets:
-                    scout.target = self.scout_targets.pop(0)
-                    scout.target_unit = None
-            self.last_scout_update = self.scout_interval
-        else:
-            self.last_scout_update -= 1
-
-    def prioritize_targets(self, unit) -> Building | None:
-        targets = []
-        for target in self.all_units:
-            if target.team != unit.team and target.health > 0:
-                dist = math.sqrt(
-                    (unit.rect.centerx - target.rect.centerx) ** 2
-                    + (unit.rect.centery - target.rect.centery) ** 2
-                )
-                priority = (
-                    3
-                    if isinstance(target, Harvester)
-                    else 2.5
-                    if isinstance(target, Headquarters)
-                    else 2
-                    if isinstance(target, Turret)
-                    else 1.5
-                    if target.health / target.max_health < 0.3
-                    else 1
-                )
-                targets.append((target, dist, priority))
-        for building in self.buildings:
-            if building.team != unit.team and building.health > 0:
-                dist = math.sqrt(
-                    (unit.rect.centerx - building.rect.centerx) ** 2
-                    + (unit.rect.centery - building.rect.centery) ** 2
-                )
-                priority = (
-                    2.5
-                    if isinstance(building, Headquarters)
-                    else 2
-                    if isinstance(building, Turret)
-                    else 1
-                )
-                targets.append((building, dist, priority))
-        targets.sort(key=lambda x: x[1] / x[2])
-        return targets[0][0] if targets and targets[0][1] < 250 else None
-
-    def find_valid_building_position(self, building_cls: type[Building]) -> Coordinate:
-        closest_field = min(
-            self.iron_fields,
-            key=lambda f: math.sqrt(
-                (f.rect.centerx - self.headquarters.rect.centerx) ** 2
-                + (f.rect.centery - self.headquarters.rect.centery) ** 2
-            ),
-            default=None,
-        )
-        for building in self.buildings:
-            if building.team == self.headquarters.team and building.health > 0:
-                for angle in range(0, 360, 20):
-                    x = building.rect.centerx + math.cos(math.radians(angle)) * 120
-                    y = building.rect.centery + math.sin(math.radians(angle)) * 120
-                    snapped_position = snap_to_grid((x, y))
-                    if is_valid_building_position(
-                        position=snapped_position,
-                        team=self.headquarters.team,
-                        new_building_cls=building_cls,
-                        buildings=buildings,
-                    ):
-                        if (
-                            closest_field
-                            and math.sqrt(
-                                (x - closest_field.rect.centerx) ** 2
-                                + (y - closest_field.rect.centery) ** 2
-                            )
-                            < 600
-                        ):
-                            return x, y
-                        elif not closest_field:
-                            return x, y
-
-        return snap_to_grid(self.headquarters.rect.center)
-
-    def produce_units(self, player_info) -> None:
-        current_units = {
-            "Harvester": len([u for u in self.units if isinstance(u, Harvester)]),
-            "Infantry": len([u for u in self.units if isinstance(u, Infantry)]),
-            "Tank": len([u for u in self.units if isinstance(u, Tank)]),
-            "Turret": len(
-                [
-                    b
-                    for b in self.buildings
-                    if isinstance(b, Turret) and b.team == self.headquarters.team
-                ]
-            ),
-            "PowerPlant": len(
-                [
-                    b
-                    for b in self.buildings
-                    if isinstance(b, PowerPlant) and b.team == self.headquarters.team
-                ]
-            ),
-            "Barracks": len(
-                [
-                    b
-                    for b in self.buildings
-                    if isinstance(b, Barracks)
-                    and b.team == self.headquarters.team
-                    and b.health > 0
-                ]
-            )
-            + len([b for b in self.headquarters.production_queue if b == Barracks]),
-            "WarFactory": len(
-                [
-                    b
-                    for b in self.buildings
-                    if isinstance(b, WarFactory)
-                    and b.team == self.headquarters.team
-                    and b.health > 0
-                ]
-            )
-            + len([b for b in self.headquarters.production_queue if b == WarFactory]),
-        }
-        target_units = {
-            unit: int(self.target_ratio[unit] * self.scale_factor)
-            for unit in self.target_ratio
-        }
-        target_units["PowerPlant"] = max(1, (current_units["Harvester"] + 1) // 2)
-        target_units["Barracks"] = 1
-        target_units["WarFactory"] = 1
-        has_barracks = current_units["Barracks"] > 0
-        has_warfactory = current_units["WarFactory"] > 0
-        total_military = (
-            current_units["Infantry"] + current_units["Tank"] + current_units["Turret"]
-        )
-        iron = self.headquarters.iron
-        console.log(
-            f"AI production check: Iron = {iron}, Has Barracks = {has_barracks}, Has WarFactory = {has_warfactory}"
-        )
-
-        if not has_barracks and iron >= Barracks.COST:
-            self.headquarters.production_queue.append(Barracks)
-            iron -= Barracks.COST
-            self.headquarters.iron = iron
-            console.log(
-                f"AI produced Barracks, cost: {Barracks.COST}, new iron: {self.headquarters.iron}"
-            )
-            return
-        elif not has_warfactory and iron >= WarFactory.COST:
-            self.headquarters.production_queue.append(WarFactory)
-            iron -= WarFactory.COST
-            self.headquarters.iron = iron
-            console.log(
-                f"AI produced WarFactory, cost: {WarFactory.COST}, new iron: {self.headquarters.iron}"
-            )
-            return
-        elif (
-            self.headquarters.has_enough_power
-            and iron >= PowerPlant.COST
-            and current_units["PowerPlant"] < target_units["PowerPlant"]
-        ):
-            self.headquarters.production_queue.append(PowerPlant)
-            iron -= PowerPlant.COST
-            self.headquarters.iron = iron
-            console.log(
-                f"AI produced PowerPlant, cost: {PowerPlant.COST}, new iron: {self.headquarters.iron}"
-            )
-            return
-
-        if (
-            (
-                current_units["Harvester"]
-                < min(target_units["Harvester"], player_info["player_harvesters"] + 1)
-                or self.iron_income_rate < 50
-            )
-            and iron >= Harvester.COST
-            and has_warfactory
-        ):
-            self.headquarters.production_queue.append(Harvester)
-            iron -= Harvester.COST
-            self.headquarters.iron = iron
-            console.log(
-                f"AI produced Harvester, cost: {Harvester.COST}, new iron: {self.headquarters.iron}"
-            )
-            return
-
-        if iron <= 0:
-            console.log("AI production halted: Insufficient iron")
-            return
-
-        production_options: list[tuple[type[GameObject], int]] = []
-        if self.state in ["Build Up", "Aggressive"]:
-            if (
-                total_military < 6
-                and has_barracks
-                and iron >= Infantry.COST
-                and current_units["Infantry"] < target_units["Infantry"]
-            ):
-                production_options.append((Infantry, Infantry.COST))
-            if (
-                total_military < 6
-                and has_warfactory
-                and iron >= Tank.COST
-                and current_units["Tank"] < target_units["Tank"]
-            ):
-                production_options.append((Tank, Tank.COST))
-            if iron >= Turret.COST and current_units["Turret"] < target_units["Turret"]:
-                production_options.append((Turret, Turret.COST))
-            if (
-                has_barracks
-                and iron >= Infantry.COST
-                and current_units["Infantry"] < target_units["Infantry"]
-            ):
-                production_options.append((Infantry, Infantry.COST))
-            if (
-                has_warfactory
-                and iron >= Tank.COST
-                and current_units["Tank"] < target_units["Tank"]
-            ):
-                production_options.append((Tank, Tank.COST))
-            if (
-                current_units["Harvester"] < target_units["Harvester"]
-                and iron >= Harvester.COST
-                and has_warfactory
-            ):
-                production_options.append((Harvester, Harvester.COST))
-            if (
-                current_units["PowerPlant"] < target_units["PowerPlant"]
-                and iron >= PowerPlant.COST
-            ):
-                production_options.append((PowerPlant, PowerPlant.COST))
-            if (
-                current_units["Barracks"] < 2
-                and iron >= Barracks.COST
-                and total_military >= 6
-            ):
-                production_options.append((Barracks, Barracks.COST))
-            if (
-                current_units["WarFactory"] < 2
-                and iron >= WarFactory.COST
-                and total_military >= 6
-            ):
-                production_options.append((WarFactory, WarFactory.COST))
-            if iron >= Headquarters.COST and current_units["Harvester"] >= 2:
-                production_options.append((Headquarters, Headquarters.COST))
-
-            if production_options:
-                unit_class, cost = random.choice(production_options)
-                self.headquarters.production_queue.append(unit_class)
-                iron -= cost
-                self.headquarters.iron = iron
-                console.log(
-                    f"AI produced {unit_class.__name__}, cost: {cost}, new iron: {self.headquarters.iron}"
-                )
-
-        elif self.state in ["Attacked", "Threatened"]:
-            if iron >= Turret.COST and current_units["Turret"] < target_units["Turret"]:
-                production_options.append((Turret, Turret.COST))
-            if (
-                has_warfactory
-                and iron >= Tank.COST
-                and current_units["Tank"] < target_units["Tank"]
-            ):
-                production_options.append((Tank, Tank.COST))
-            if (
-                has_barracks
-                and iron >= Infantry.COST
-                and current_units["Infantry"] < target_units["Infantry"]
-            ):
-                production_options.append((Infantry, Infantry.COST))
-            if (
-                current_units["Harvester"]
-                < min(target_units["Harvester"], player_info["player_harvesters"] + 1)
-                and iron >= Harvester.COST
-                and has_warfactory
-            ):
-                production_options.append((Harvester, Harvester.COST))
-            if (
-                current_units["PowerPlant"] < target_units["PowerPlant"]
-                and iron >= PowerPlant.COST
-            ):
-                production_options.append((PowerPlant, PowerPlant.COST))
-
-            if production_options:
-                unit_class, cost = random.choice(production_options)
-                self.headquarters.production_queue.append(unit_class)
-                iron -= cost
-                self.headquarters.iron = iron
-                console.log(
-                    f"AI produced {unit_class.__name__}, cost: {cost}, new iron: {self.headquarters.iron}"
-                )
-
-        elif (
-            self.state == "Broke"
-            and has_warfactory
-            and iron >= Harvester.COST
-            and current_units["Harvester"]
-            < min(target_units["Harvester"], player_info["player_harvesters"] + 1)
-        ):
-            self.headquarters.production_queue.append(Harvester)
-            iron -= Harvester.COST
-            self.headquarters.iron = iron
-            console.log(
-                f"AI produced Harvester, cost: {Harvester.COST}, new iron: {self.headquarters.iron}"
-            )
-
-        if (
-            self.headquarters.production_queue
-            and not self.headquarters.production_timer
-        ):
-            self.headquarters.production_timer = self.headquarters.get_production_time(
-                self.headquarters.production_queue[0]
-            )
-        if (
-            self.headquarters.pending_building
-            and not self.headquarters.pending_building_pos
-        ):
-            x, y = self.find_valid_building_position(self.headquarters.pending_building)
-            self.headquarters.pending_building_pos = x, y
-            self.headquarters.place_building(x, y, self.headquarters.pending_building)
-
-    def coordinate_attack(self, surprise: bool = False) -> None:
-        self.wave_timer = 0
-        self.wave_number += 1
-        wave_size = (
-            min(8 + self.wave_number * 2, self.max_wave_size)
-            if not surprise
-            else min(12 + self.wave_number, self.max_wave_size)
-        )
-        self.wave_interval = random.randint(150, 250)
-        combat_units = [
-            u for u in self.units if isinstance(u, (Tank, Infantry)) and not u.target
-        ]
-        if not combat_units:
-            return
-        tactics = (
-            ["balanced", "flank", "all_in"]
-            if self.state == "Aggressive" or surprise
-            else ["all_in", "defensive"]
-            if self.state in ["Threatened", "Attacked"]
-            else ["balanced", "flank", "all_in"]
-        )
-        tactic = random.choice(tactics)
-        if tactic == "balanced":
-            infantry_count = min(
-                int(wave_size * 0.6),
-                len([u for u in combat_units if isinstance(u, Infantry)]),
-            )
-            tank_count = min(
-                int(wave_size * 0.4),
-                len([u for u in combat_units if isinstance(u, Tank)]),
-            )
-            attack_units = [u for u in combat_units if isinstance(u, Infantry)][
-                :infantry_count
-            ] + [u for u in combat_units if isinstance(u, Tank)][:tank_count]
-            target = self.prioritize_targets(attack_units[0] if attack_units else None)
-            if target:
-                for unit in attack_units:
-                    unit.target_unit = target
-                    unit.target = (
-                        target.rect.centerx + random.uniform(-20, 20),
-                        target.rect.centery + random.uniform(-20, 20),
-                    )
-        elif tactic == "flank":
-            attack_units = combat_units[:wave_size]
-            gdi_hq = next(
-                (
-                    b
-                    for b in self.buildings
-                    if b.team == Team.GDI and isinstance(b, Headquarters)
-                ),
-                None,
-            )
-            if gdi_hq:
-                group_size = len(attack_units) // 2
-                for i, unit in enumerate(attack_units):
-                    offset_x = (
-                        random.uniform(80, 120)
-                        if i < group_size
-                        else random.uniform(-120, -80)
-                    )
-                    offset_y = (
-                        random.uniform(80, 120)
-                        if i < group_size
-                        else random.uniform(-120, -80)
-                    )
-                    unit.target = (
-                        gdi_hq.rect.centerx + offset_x,
-                        gdi_hq.rect.centery + offset_y,
-                    )
-                    unit.target_unit = gdi_hq
-        elif tactic == "all_in":
-            attack_units = combat_units[:wave_size]
-            target = self.prioritize_targets(attack_units[0] if attack_units else None)
-            if target:
-                for unit in attack_units:
-                    unit.target_unit = target
-                    unit.target = (
-                        target.rect.centerx + random.uniform(-20, 20),
-                        target.rect.centery + random.uniform(-20, 20),
-                    )
-        elif tactic == "defensive":
-            attack_units = combat_units[:wave_size]
-            for unit in attack_units:
-                unit.target = (
-                    self.headquarters.rect.centerx + random.uniform(-50, 50),
-                    self.headquarters.rect.centery + random.uniform(-50, 50),
-                )
-                unit.target_unit = None
-
-    def update(self) -> None:
-        self.timer += 1
-        self.wave_timer += 1
-        self.surprise_attack_cooldown = max(0, self.surprise_attack_cooldown - 1)
-        player_info = self.evaluate_game_state()
-        self.update_scouting()
-        if self.timer >= self.action_interval:
-            self.timer = 0
-            self.produce_units(player_info)
-        if (
-            self.surprise_attack_cooldown <= 0
-            and player_info["player_tanks"]
-            + player_info["player_infantry"]
-            + player_info["player_turrets"]
-            < 5
-            and random.random() < 0.1
-        ):
-            self.coordinate_attack(surprise=True)
-            self.surprise_attack_cooldown = 300
-        elif self.wave_timer >= self.wave_interval:
-            self.coordinate_attack()
 
 
 if __name__ == "__main__":
@@ -1405,17 +583,19 @@ if __name__ == "__main__":
 
     player_units: pg.sprite.Group = pg.sprite.Group()
     ai_units: pg.sprite.Group = pg.sprite.Group()
-    all_units: pg.sprite.Group = pg.sprite.Group()
+    global_units: pg.sprite.Group = pg.sprite.Group()
     iron_fields: pg.sprite.Group = pg.sprite.Group()
-    buildings: pg.sprite.Group = pg.sprite.Group()
+    global_buildings: pg.sprite.Group = pg.sprite.Group()
     projectiles: pg.sprite.Group = pg.sprite.Group()
     particles: pg.sprite.Group = pg.sprite.Group()
     selected_units: pg.sprite.Group = pg.sprite.Group()
 
-    gdi_headquarters = Headquarters(300, 300, Team.GDI)
-    nod_headquarters = Headquarters(MAP_WIDTH - 300, MAP_HEIGHT - 300, Team.NOD)
-    nod_headquarters.iron = 1500
-    interface = ProductionInterface(headquarters=gdi_headquarters)
+    gdi_hq = Headquarters(x=300, y=300, team=Team.GDI)
+    nod_hq = Headquarters(x=MAP_WIDTH - 300, y=MAP_HEIGHT - 300, team=Team.NOD)
+    nod_hq.iron = 1500
+    interface = ProductionInterface(
+        hq=gdi_hq, all_buildings=global_buildings, font=font
+    )
     console = GameConsole()
     fog_of_war = FogOfWar(map_size=(MAP_WIDTH, MAP_HEIGHT), tile_size=TILE_SIZE)
 
@@ -1438,20 +618,20 @@ if __name__ == "__main__":
                     TILE_SIZE // 4,
                 )  # Dark spots
 
-    ai = AI(nod_headquarters, ai_units, all_units, iron_fields, buildings)
+    ai = AI(hq=nod_hq, console=console)
 
     player_units.add(Infantry(350, 300, Team.GDI))
     player_units.add(Infantry(370, 300, Team.GDI))
     player_units.add(Infantry(390, 300, Team.GDI))
-    player_units.add(Harvester(400, 400, Team.GDI, gdi_headquarters))
+    player_units.add(Harvester(400, 400, Team.GDI, gdi_hq))
 
     ai_units.add(Infantry(2050, 1200, Team.NOD))
     ai_units.add(Infantry(2070, 1200, Team.NOD))
     ai_units.add(Infantry(2090, 1200, Team.NOD))
-    ai_units.add(Harvester(2200, 1300, Team.NOD, nod_headquarters))
+    ai_units.add(Harvester(2200, 1300, Team.NOD, nod_hq))
 
-    all_units.add(player_units, ai_units)
-    buildings.add(gdi_headquarters, nod_headquarters)
+    global_units.add(player_units, ai_units)
+    global_buildings.add(gdi_hq, nod_hq)
     for _ in range(40):
         iron_fields.add(
             IronField(
@@ -1469,26 +649,34 @@ if __name__ == "__main__":
                 world_x, world_y = camera.screen_to_world(event.pos)
                 target_x, target_y = event.pos
                 if event.button == 1:
-                    if gdi_headquarters.pending_building:
+                    if gdi_hq.pending_building:
                         snapped_position = snap_to_grid((world_x, world_y))
                         if is_valid_building_position(
                             position=snapped_position,
-                            team=gdi_headquarters.team,
-                            new_building_cls=gdi_headquarters.pending_building,
-                            buildings=buildings,
+                            team=gdi_hq.team,
+                            new_building_cls=gdi_hq.pending_building,
+                            buildings=global_buildings,
                         ):
-                            gdi_headquarters.place_building(
-                                world_x, world_y, gdi_headquarters.pending_building
+                            gdi_hq.place_building(
+                                x=world_x,
+                                y=world_y,
+                                unit_cls=gdi_hq.pending_building,
+                                all_buildings=global_buildings,
                             )
                         continue
 
-                    if interface.handle_click(event.pos):
+                    if interface.handle_click(
+                        event.pos,
+                        own_buildings=[
+                            b for b in global_buildings if b.team == Team.GDI
+                        ],
+                    ):
                         continue
 
                     clicked_building = next(
                         (
                             b
-                            for b in buildings
+                            for b in global_buildings
                             if b.team == Team.GDI
                             and camera.apply(b.rect).collidepoint(target_x, target_y)
                         ),
@@ -1502,18 +690,14 @@ if __name__ == "__main__":
                         select_start = event.pos
                         select_rect = pg.Rect(target_x, target_y, 0, 0)
                 elif event.button == 3:
-                    if gdi_headquarters.pending_building:
-                        gdi_headquarters.pending_building = (
-                            gdi_headquarters.pending_building_pos
-                        ) = None
-                        if (
-                            gdi_headquarters.production_queue
-                            and gdi_headquarters.has_enough_power
-                        ):
-                            gdi_headquarters.production_timer = (
-                                gdi_headquarters.get_production_time(
-                                    gdi_headquarters.production_queue[0]
-                                )
+                    if gdi_hq.pending_building:
+                        gdi_hq.pending_building = gdi_hq.pending_building_pos = None
+                        if gdi_hq.production_queue and gdi_hq.has_enough_power:
+                            gdi_hq.production_timer = gdi_hq.get_production_time(
+                                unit_class=gdi_hq.production_queue[0],
+                                friendly_buildings=[
+                                    b for b in global_buildings if b.team == Team.GDI
+                                ],
                             )
                         continue
                     clicked_field = next(
@@ -1527,7 +711,7 @@ if __name__ == "__main__":
                     clicked_enemy_unit = next(
                         (
                             u
-                            for u in all_units
+                            for u in global_units
                             if u.team != Team.GDI
                             and camera.apply(u.rect).collidepoint(target_x, target_y)
                         ),
@@ -1536,7 +720,7 @@ if __name__ == "__main__":
                     clicked_enemy_building = next(
                         (
                             b
-                            for b in buildings
+                            for b in global_buildings
                             if b.team != Team.GDI
                             and camera.apply(b.rect).collidepoint(target_x, target_y)
                         ),
@@ -1550,7 +734,9 @@ if __name__ == "__main__":
                             / len(selected_units),
                         )
                         formation_positions = calculate_formation_positions(
-                            (world_x, world_y), (world_x, world_y), len(selected_units)
+                            center=(world_x, world_y),
+                            target=(world_x, world_y),
+                            num_units=len(selected_units),
                         )
                         for unit, pos in zip(selected_units, formation_positions):
                             unit.target = pos
@@ -1568,9 +754,8 @@ if __name__ == "__main__":
             elif event.type == pg.MOUSEMOTION and selecting:
                 current_pos = event.pos
                 if not select_start:
-                    raise TypeError(
-                        "No selection rect start point"
-                    )  # Temporary handling, review later
+                    raise TypeError("No selection rect start point")
+                    # Temporary handling, review later
 
                 select_rect = pg.Rect(
                     min(select_start[0], current_pos[0]),
@@ -1580,9 +765,8 @@ if __name__ == "__main__":
                 )
             elif event.type == pg.MOUSEBUTTONUP and event.button == 1 and selecting:
                 if not select_start:
-                    raise TypeError(
-                        "No selection rect start point"
-                    )  # Temporary handling, review later
+                    raise TypeError("No selection rect start point")
+                    # Temporary handling, review later
 
                 selecting = False
                 for unit in player_units:
@@ -1602,11 +786,41 @@ if __name__ == "__main__":
                         selected_units.add(unit)
             console.handle_event(event)
 
-        camera.update(selected_units, pg.mouse.get_pos(), interface.surface.get_rect())
-        all_units.update()
+        camera.update(
+            selected_units.sprites(), pg.mouse.get_pos(), interface.surface.get_rect()
+        )
+        for unit in global_units:
+            if isinstance(unit, Harvester):
+                if unit.team == Team.GDI:
+                    unit.update(enemy_units=ai_units, iron_fields=iron_fields)
+                else:
+                    unit.update(enemy_units=player_units, iron_fields=iron_fields)
+            else:
+                unit.update()
+
         iron_fields.update()
-        for building in buildings:
-            if isinstance(building, Turret):
+        for building in global_buildings:
+            if isinstance(building, Headquarters):
+                if building.team == Team.GDI:
+                    building.update(
+                        particles=particles,
+                        friendly_units=player_units,
+                        friendly_buildings=[
+                            b for b in global_buildings if b.team == Team.GDI
+                        ],
+                        all_units=global_units,
+                    )
+                else:
+                    building.update(
+                        particles=particles,
+                        friendly_units=ai_units,
+                        friendly_buildings=[
+                            b for b in global_buildings if b.team != Team.GDI
+                        ],
+                        all_units=global_units,
+                    )
+
+            elif isinstance(building, Turret):
                 if building.team == Team.GDI:
                     building.update(
                         particles=particles,
@@ -1622,17 +836,40 @@ if __name__ == "__main__":
             else:
                 building.update(particles=particles)
 
-        projectiles.update()
+        projectiles.update(particles)
         particles.update()
-        handle_collisions(all_units)
-        handle_attacks(player_units, all_units, buildings, projectiles, particles)
-        handle_attacks(ai_units, all_units, buildings, projectiles, particles)
-        handle_projectiles(projectiles, all_units, buildings)
-        ai.update()
-        fog_of_war.update_visibility(player_units, buildings, Team.GDI)
+        handle_collisions(global_units)
+        handle_attacks(
+            team_units=player_units,
+            all_units=global_units,
+            all_buildings=global_buildings,
+            projectiles=projectiles,
+            particles=particles,
+        )
+        handle_attacks(
+            team_units=ai_units,
+            all_units=global_units,
+            all_buildings=global_buildings,
+            projectiles=projectiles,
+            particles=particles,
+        )
+        handle_projectiles(
+            projectiles=projectiles,
+            all_units=global_units,
+            all_buildings=global_buildings,
+        )
+        ai.update(
+            friendly_units=ai_units.sprites(),
+            friendly_buildings=[b for b in global_buildings if b.team != Team.GDI],
+            enemy_units=player_units.sprites(),
+            enemy_buildings=[b for b in global_buildings if b.team == Team.GDI],
+            iron_fields=iron_fields.sprites(),
+            all_buildings=global_buildings,
+        )
+        fog_of_war.update_visibility(player_units, global_buildings, Team.GDI)
         draw(surface_=screen, font_=font)
-        for obj in all_units:
-            obj.under_attack = False
+        for unit in global_units:
+            unit.under_attack = False
 
         pg.display.flip()
         clock.tick(60)
