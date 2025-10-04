@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING, Literal
 
 import pygame as pg
@@ -20,13 +19,19 @@ if TYPE_CHECKING:
 class Harvester(GameObject):
     COST = 800
     POWER_USAGE = 20
+    IRON_TRANSFER_RANGE = 30
+    """Distance within which iron can be harvested/delivered."""
 
     def __init__(
-        self, x: float, y: float, team: Team, hq: Headquarters, font: pg.Font
+        self,
+        position: pg.typing.SequenceLike,
+        team: Team,
+        hq: Headquarters,
+        font: pg.Font,
     ) -> None:
-        super().__init__(x=x, y=y, team=team)
+        super().__init__(position=position, team=team)
         self.image = pg.Surface((50, 30), pg.SRCALPHA)
-        self.rect = self.image.get_rect(center=(x, y))
+        self.rect = self.image.get_rect(center=position)
         self.hq = hq
         self.font = font
         self.speed = 2.5
@@ -55,14 +60,11 @@ class Harvester(GameObject):
         super().update()
         if self.cooldown_timer == 0:
             closest_target, min_dist = None, float("inf")
-            for target in enemy_units:
-                if target.health > 0 and isinstance(target, Infantry):
-                    dist = math.sqrt(
-                        (self.rect.centerx - target.rect.centerx) ** 2
-                        + (self.rect.centery - target.rect.centery) ** 2
-                    )
+            for u in enemy_units:
+                if u.health > 0 and isinstance(u, Infantry):
+                    dist = self.distance_to(u.position)
                     if dist < self.attack_range and dist < min_dist:
-                        closest_target, min_dist = target, dist
+                        closest_target, min_dist = u, dist
 
             if closest_target:
                 closest_target.health -= self.attack_damage
@@ -76,29 +78,16 @@ class Harvester(GameObject):
                 if rich_fields:
                     self.target_field = min(
                         rich_fields,
-                        key=lambda f: math.sqrt(
-                            (self.rect.centerx - f.rect.centerx) ** 2
-                            + (self.rect.centery - f.rect.centery) ** 2
-                        ),
+                        key=lambda f: self.distance_to(f.position),
                     )
                 else:
                     self.target_field = min(
                         iron_fields,
-                        key=lambda f: math.sqrt(
-                            (self.rect.centerx - f.rect.centerx) ** 2
-                            + (self.rect.centery - f.rect.centery) ** 2
-                        ),
-                        default=None,
+                        key=lambda f: self.distance_to(f.position),
                     )
             if self.target_field:
-                self.target = self.target_field.rect.center
-                if (
-                    math.sqrt(
-                        (self.rect.centerx - self.target[0]) ** 2
-                        + (self.rect.centery - self.target[1]) ** 2
-                    )
-                    < 30
-                ):
+                self.target = self.target_field.position
+                if self.distance_to(self.target) < Harvester.IRON_TRANSFER_RANGE:
                     self.state = "HARVESTING"
                     self.target = None
                     self.harvest_time = 40
@@ -115,7 +104,7 @@ class Harvester(GameObject):
                 self.iron += harvested
                 self.target_field.resources -= harvested
                 self.state = "RETURNING_TO_HQ"
-                self.target = self.hq.rect.center
+                self.target = self.hq.position
 
         elif self.state == "RETURNING_TO_HQ":
             if not self.target:
@@ -123,13 +112,7 @@ class Harvester(GameObject):
                     f"Harvester RETURNING_TO_HQ has no target.\n{self}"
                 )  # Temporary handling, review later
 
-            if (
-                math.sqrt(
-                    (self.rect.centerx - self.target[0]) ** 2
-                    + (self.rect.centery - self.target[1]) ** 2
-                )
-                < 30
-            ):
+            if self.distance_to(self.target) < Harvester.IRON_TRANSFER_RANGE:
                 self.hq.iron += self.iron
                 self.iron = 0
                 self.state = "MOVING_TO_FIELD"

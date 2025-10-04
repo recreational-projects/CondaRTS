@@ -52,17 +52,14 @@ def handle_collisions(all_units: Iterable[GameObject]) -> None:
     for unit in all_units:
         for other in all_units:
             if unit != other and unit.rect.colliderect(other.rect):
-                dx, dy = (
-                    unit.rect.centerx - other.rect.centerx,
-                    unit.rect.centery - other.rect.centery,
-                )
-                dist = math.sqrt(dx**2 + dy**2)
+                dist = unit.distance_to(other.position)
                 if dist > 0:
                     push = (
                         0.3
                         if isinstance(unit, Harvester) and isinstance(other, Harvester)
                         else 0.5
                     )
+                    dx, dy = unit.displacement_to(other.position)
                     unit.rect.x += push * dx / dist
                     unit.rect.y += push * dy / dist
                     other.rect.x -= push * dx / dist
@@ -81,38 +78,28 @@ def handle_attacks(
         if isinstance(unit, (Tank, Infantry)) and unit.cooldown_timer == 0:
             closest_target, min_dist = None, float("inf")
             if unit.target_unit and unit.target_unit.health > 0:
-                dist = math.sqrt(
-                    (unit.rect.centerx - unit.target_unit.rect.centerx) ** 2
-                    + (unit.rect.centery - unit.target_unit.rect.centery) ** 2
-                )
+                dist = unit.distance_to(unit.target_unit.position)
                 if dist <= unit.attack_range:
                     closest_target, min_dist = unit.target_unit, dist
 
             if not closest_target:
-                for target in (*all_units, *all_buildings):
-                    if target.team != unit.team and target.health > 0:
-                        dist = math.sqrt(
-                            (unit.rect.centerx - target.rect.centerx) ** 2
-                            + (unit.rect.centery - target.rect.centery) ** 2
-                        )
+                for obj in (*all_units, *all_buildings):
+                    if obj.team != unit.team and obj.health > 0:
+                        dist = unit.distance_to(obj.position)
                         if dist <= unit.attack_range and dist < min_dist:
-                            closest_target, min_dist = target, dist
+                            closest_target, min_dist = obj, dist
 
             if closest_target:
                 unit.target_unit = closest_target
-                unit.target = closest_target.rect.center
+                unit.target = closest_target.position
                 if isinstance(unit, Tank):
-                    dx, dy = (
-                        closest_target.rect.centerx - unit.rect.centerx,
-                        closest_target.rect.centery - unit.rect.centery,
-                    )
+                    d = unit.displacement_to(closest_target.position)
                     unit.angle = math.degrees(
-                        math.atan2(dy, dx)
+                        math.atan2(d.y, d.x)
                     )  # Updated to match Tank's angle calculation
                     projectiles.add(
                         Projectile(
-                            unit.rect.centerx,
-                            unit.rect.centery,
+                            unit.position,
                             closest_target,
                             unit.attack_damage,
                             unit.team,
@@ -120,17 +107,16 @@ def handle_attacks(
                     )
                     unit.recoil = 5
                     barrel_angle = math.radians(unit.angle)
-                    smoke_x = unit.rect.centerx + math.cos(barrel_angle) * (
+                    smoke_x = unit.position.x + math.cos(barrel_angle) * (
                         unit.rect.width // 2 + 12
                     )
-                    smoke_y = unit.rect.centery + math.sin(barrel_angle) * (
+                    smoke_y = unit.position.y + math.sin(barrel_angle) * (
                         unit.rect.width // 2 + 12
                     )
                     for _ in range(5):
                         particles.add(
                             Particle(
-                                smoke_x,
-                                smoke_y,
+                                (smoke_x, smoke_y),
                                 random.uniform(-1.5, 1.5),
                                 random.uniform(-1.5, 1.5),
                                 random.randint(6, 10),
@@ -146,8 +132,7 @@ def handle_attacks(
                     for _ in range(3):
                         particles.add(
                             Particle(
-                                unit.rect.centerx,
-                                unit.rect.centery,
+                                unit.position,
                                 random.uniform(-1, 1),
                                 random.uniform(-1, 1),
                                 4,
@@ -183,8 +168,7 @@ def handle_projectiles(
                 for _ in range(5):
                     particles.add(
                         Particle(
-                            projectile.rect.centerx,
-                            projectile.rect.centery,
+                            projectile.position,
                             random.uniform(-2, 2),
                             random.uniform(-2, 2),
                             6,
@@ -203,27 +187,27 @@ def draw(surface_: pg.Surface) -> None:
     surface_.fill(pg.Color("black"))
     surface_.blit(base_map, (-camera.rect.x, -camera.rect.y))
     for field in iron_fields:
-        if field.resources > 0 and fog_of_war.is_explored(field.rect.center):
+        if field.resources > 0 and fog_of_war.is_explored(field.position):
             field.draw(surface=surface_, camera=camera)
 
     for building in global_buildings:
         if building.health > 0 and (
-            fog_of_war.is_visible(building.rect.center)
-            or (building.is_seen and fog_of_war.is_explored(building.rect.center))
+            fog_of_war.is_visible(building.position)
+            or (building.is_seen and fog_of_war.is_explored(building.position))
         ):
             building.draw(surface=surface_, camera=camera)
 
     fog_of_war.draw(surface=surface_, camera=camera)
     for unit in global_units:
-        if unit.team == Team.GDI or fog_of_war.is_visible(unit.rect.center):
+        if unit.team == Team.GDI or fog_of_war.is_visible(unit.position):
             unit.draw(surface=surface_, camera=camera)
 
     for projectile in projectiles:
-        if projectile.team == Team.GDI or fog_of_war.is_visible(projectile.rect.center):
+        if projectile.team == Team.GDI or fog_of_war.is_visible(projectile.position):
             projectile.draw(surface=surface_, camera=camera)
 
     for particle in particles:
-        if fog_of_war.is_visible(particle.rect.center):
+        if fog_of_war.is_visible(particle.position):
             particle.draw(surface=surface_, camera=camera)
 
     interface.draw(
@@ -367,7 +351,7 @@ class ProductionInterface:
             Turret: "Turret",
         }
 
-    def _local_pos(self, screen_pos: tuple[int, int]) -> tuple[int, int]:
+    def _local_pos(self, screen_pos: pg.typing.IntPoint) -> tuple[int, int]:
         """Convert screen position to local position."""
         return screen_pos[0] - SCREEN_WIDTH + self.WIDTH, screen_pos[1]
 
@@ -473,7 +457,7 @@ class ProductionInterface:
         self,
         *,
         surface_: pg.Surface,
-        mouse_pos: tuple[int, int],
+        mouse_pos: pg.typing.IntPoint,
         all_buildings: Iterable[Building],
     ) -> None:
         if not self.hq.pending_building:
@@ -542,7 +526,7 @@ class ProductionInterface:
         surface_.blit(source=self.surface, dest=(SCREEN_WIDTH - self.WIDTH, 0))
 
     def handle_click(
-        self, screen_pos: tuple[int, int], own_buildings: Iterable[Building]
+        self, screen_pos: pg.typing.IntPoint, own_buildings: Iterable[Building]
     ) -> bool:
         local_pos = self._local_pos(screen_pos)
         global selected_building
@@ -593,9 +577,9 @@ if __name__ == "__main__":
     particles: pg.sprite.Group = pg.sprite.Group()
     selected_units: pg.sprite.Group = pg.sprite.Group()
 
-    gdi_hq = Headquarters(x=300, y=300, team=Team.GDI, font=base_font)
+    gdi_hq = Headquarters(position=(300, 300), team=Team.GDI, font=base_font)
     nod_hq = Headquarters(
-        x=MAP_WIDTH - 300, y=MAP_HEIGHT - 300, team=Team.NOD, font=base_font
+        position=(MAP_WIDTH - 300, MAP_HEIGHT - 300), team=Team.NOD, font=base_font
     )
     nod_hq.iron = 1500
     interface = ProductionInterface(
@@ -625,15 +609,15 @@ if __name__ == "__main__":
 
     ai = AI(hq=nod_hq, console=console)
 
-    player_units.add(Infantry(350, 300, Team.GDI))
-    player_units.add(Infantry(370, 300, Team.GDI))
-    player_units.add(Infantry(390, 300, Team.GDI))
-    player_units.add(Harvester(400, 400, Team.GDI, gdi_hq, font=base_font))
+    player_units.add(Infantry((350, 300), Team.GDI))
+    player_units.add(Infantry((370, 300), Team.GDI))
+    player_units.add(Infantry((390, 300), Team.GDI))
+    player_units.add(Harvester((400, 400), Team.GDI, gdi_hq, font=base_font))
 
-    ai_units.add(Infantry(2050, 1200, Team.NOD))
-    ai_units.add(Infantry(2070, 1200, Team.NOD))
-    ai_units.add(Infantry(2090, 1200, Team.NOD))
-    ai_units.add(Harvester(2200, 1300, Team.NOD, nod_hq, font=base_font))
+    ai_units.add(Infantry((2050, 1200), Team.NOD))
+    ai_units.add(Infantry((2070, 1200), Team.NOD))
+    ai_units.add(Infantry((2090, 1200), Team.NOD))
+    ai_units.add(Harvester((2200, 1300), Team.NOD, nod_hq, font=base_font))
 
     global_units.add(player_units, ai_units)
     global_buildings.add(gdi_hq, nod_hq)
@@ -652,20 +636,19 @@ if __name__ == "__main__":
             if event.type == pg.QUIT:
                 running = False
             elif event.type == pg.MOUSEBUTTONDOWN:
-                world_x, world_y = camera.screen_to_world(event.pos)
+                world_pos = camera.screen_to_world(event.pos)
                 target_x, target_y = event.pos
                 if event.button == 1:
                     if gdi_hq.pending_building:
-                        snapped_position = snap_to_grid((world_x, world_y))
+                        snapped_pos = snap_to_grid(world_pos)
                         if is_valid_building_position(
-                            position=snapped_position,
+                            position=snapped_pos,
                             team=gdi_hq.team,
                             new_building_cls=gdi_hq.pending_building,
                             buildings=global_buildings,
                         ):
                             gdi_hq.place_building(
-                                x=world_x,
-                                y=world_y,
+                                position=world_pos,
                                 unit_cls=gdi_hq.pending_building,
                                 all_buildings=global_buildings,
                             )
@@ -695,6 +678,7 @@ if __name__ == "__main__":
                         selecting = True
                         select_start = event.pos
                         select_rect = pg.Rect(target_x, target_y, 0, 0)
+
                 elif event.button == 3:
                     if gdi_hq.pending_building:
                         gdi_hq.pending_building = gdi_hq.pending_building_pos = None
@@ -734,14 +718,14 @@ if __name__ == "__main__":
                     )
                     if selected_units:
                         group_center = (
-                            sum(u.rect.centerx for u in selected_units)
+                            sum(u.position[0] for u in selected_units)
                             / len(selected_units),
-                            sum(u.rect.centery for u in selected_units)
+                            sum(u.position[1] for u in selected_units)
                             / len(selected_units),
                         )
                         formation_positions = calculate_formation_positions(
-                            center=(world_x, world_y),
-                            target=(world_x, world_y),
+                            center=world_pos,
+                            target=world_pos,
                             num_units=len(selected_units),
                         )
                         for unit, pos in zip(selected_units, formation_positions):
@@ -750,13 +734,14 @@ if __name__ == "__main__":
                             unit.target_unit = None
                             if clicked_enemy_unit:
                                 unit.target_unit = clicked_enemy_unit
-                                unit.target = clicked_enemy_unit.rect.center
+                                unit.target = clicked_enemy_unit.position
                             elif clicked_enemy_building:
                                 unit.target_unit = clicked_enemy_building
-                                unit.target = clicked_enemy_building.rect.center
+                                unit.target = clicked_enemy_building.position
                             elif clicked_field:
-                                unit.target = clicked_field.rect.center
+                                unit.target = clicked_field.position
                                 unit.formation_target = None
+
             elif event.type == pg.MOUSEMOTION and selecting:
                 current_pos = event.pos
                 if not select_start:

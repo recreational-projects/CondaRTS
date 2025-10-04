@@ -22,10 +22,11 @@ class Turret(Building):
     POWER_USAGE = 25
     SIZE = 50, 50
 
-    def __init__(self, *, x: float, y: float, team: Team, font: pg.Font) -> None:
+    def __init__(
+        self, *, position: pg.typing.SequenceLike, team: Team, font: pg.Font
+    ) -> None:
         super().__init__(
-            x=x,
-            y=y,
+            position=position,
             team=team,
             color=pg.Color(180, 180, 0) if team == Team.GDI else pg.Color(180, 0, 0),
             font=font,
@@ -54,24 +55,17 @@ class Turret(Building):
             closest_target, min_dist = None, float("inf")
             for u in enemy_units:
                 if u.health > 0:
-                    dist = math.sqrt(
-                        (self.rect.centerx - u.rect.centerx) ** 2
-                        + (self.rect.centery - u.rect.centery) ** 2
-                    )
+                    dist = self.distance_to(u.position)
                     if dist < self.attack_range and dist < min_dist:
                         closest_target, min_dist = u, dist
 
             if closest_target:
                 self.target_unit = closest_target
-                dx, dy = (
-                    closest_target.rect.centerx - self.rect.centerx,
-                    closest_target.rect.centery - self.rect.centery,
-                )
+                dx, dy = self.displacement_to(closest_target.position)
                 self.angle = math.degrees(math.atan2(-dy, dx))
                 projectiles.add(
                     Projectile(
-                        self.rect.centerx,
-                        self.rect.centery,
+                        self.position,
                         closest_target,
                         self.attack_damage,
                         self.team,
@@ -81,8 +75,7 @@ class Turret(Building):
                 for _ in range(5):
                     particles.add(
                         Particle(
-                            self.rect.centerx,
-                            self.rect.centery,
+                            self.position,
                             random.uniform(-1.5, 1.5),
                             random.uniform(-1.5, 1.5),
                             random.randint(6, 10),

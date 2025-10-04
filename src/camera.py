@@ -13,12 +13,12 @@ from src.constants import (
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
 )
+from src.geometry import Coordinate
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from src.game_object import GameObject
-    from src.geometry import Coordinate
 
 
 @dataclass(kw_only=True)
@@ -31,17 +31,20 @@ class Camera:
     def update(
         self,
         selected_units: Sequence[GameObject],
-        mouse_pos: Coordinate,
+        mouse_pos: pg.typing.SequenceLike,
         interface_rect: pg.Rect,
     ) -> None:
-        mx, my = mouse_pos
-        if interface_rect.collidepoint(mx, my) or my > SCREEN_HEIGHT - CONSOLE_HEIGHT:
+        mouse_coord = Coordinate(mouse_pos)
+        if (
+            interface_rect.collidepoint(mouse_coord)
+            or mouse_coord.y > SCREEN_HEIGHT - CONSOLE_HEIGHT
+        ):
             return
         if selected_units:
-            avg_x = sum(unit.rect.centerx for unit in selected_units) / len(
+            avg_x = sum(unit.position.x for unit in selected_units) / len(
                 selected_units
             )
-            avg_y = sum(unit.rect.centery for unit in selected_units) / len(
+            avg_y = sum(unit.position.y for unit in selected_units) / len(
                 selected_units
             )
             self.rect.center = (
@@ -55,14 +58,14 @@ class Camera:
                 ),
             )
         else:
-            if mx < 30 and self.rect.left > 0:
+            if mouse_coord.x < 30 and self.rect.left > 0:
                 self.rect.x -= 10
-            elif mx > SCREEN_WIDTH - 230 and self.rect.right < MAP_WIDTH:
+            elif mouse_coord.x > SCREEN_WIDTH - 230 and self.rect.right < MAP_WIDTH:
                 self.rect.x += 10
-            if my < 30 and self.rect.top > 0:
+            if mouse_coord.y < 30 and self.rect.top > 0:
                 self.rect.y -= 10
             elif (
-                my > SCREEN_HEIGHT - CONSOLE_HEIGHT - 30
+                mouse_coord.y > SCREEN_HEIGHT - CONSOLE_HEIGHT - 30
                 and self.rect.bottom < MAP_HEIGHT
             ):
                 self.rect.y += 10
@@ -73,10 +76,10 @@ class Camera:
             rect.x - self.rect.x, rect.y - self.rect.y, rect.width, rect.height
         )
 
-    def screen_to_world(self, screen_pos: Coordinate) -> Coordinate:
-        x, y = screen_pos
-        map_area_y = int(min(y, SCREEN_HEIGHT - CONSOLE_HEIGHT))
-        return (
-            max(0, min(MAP_WIDTH, int(x) + self.rect.x)),
+    def screen_to_world(self, screen_pos: pg.typing.SequenceLike) -> Coordinate:
+        screen_coord = Coordinate(screen_pos)
+        map_area_y = int(min(screen_coord.y, SCREEN_HEIGHT - CONSOLE_HEIGHT))
+        return Coordinate(
+            max(0, min(MAP_WIDTH, int(screen_coord.x) + self.rect.x)),
             max(0, min(MAP_HEIGHT, map_area_y + self.rect.y)),
         )

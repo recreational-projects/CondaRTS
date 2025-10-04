@@ -13,28 +13,25 @@ if TYPE_CHECKING:
     from src.building import Building
     from src.constants import Team
 
-type Coordinate = tuple[float, float]
+Coordinate = pg.Vector2
 
 
 def _is_within_building_range(
-    *, position: Coordinate, team: Team, buildings: Iterable[Building]
+    *, position: pg.typing.SequenceLike, team: Team, buildings: Iterable[Building]
 ) -> bool:
     """Return whether `position` is within construction range of team's building."""
-    x, y = position
+    pos = Coordinate(position)
     return any(
         building.team == team
         and building.health > 0
-        and (
-            (x - building.rect.centerx) ** 2 + (y - building.rect.centery) ** 2
-            <= BUILDING_CONSTRUCTION_RANGE**2
-        )
+        and pos.distance_to(building.position) < BUILDING_CONSTRUCTION_RANGE
         for building in buildings
     )
 
 
 def _collides_with_building(
     *,
-    position: Coordinate,
+    position: pg.typing.SequenceLike,
     new_building_cls: type[Building],
     buildings: Iterable[Building],
 ) -> bool:
@@ -48,7 +45,7 @@ def _collides_with_building(
 
 def is_valid_building_position(
     *,
-    position: Coordinate,
+    position: pg.typing.SequenceLike,
     new_building_cls: type[Building],
     team: Team,
     buildings: Iterable[Building],
@@ -64,15 +61,16 @@ def is_valid_building_position(
     )
 
 
-def snap_to_grid(position: Coordinate) -> Coordinate:
+def snap_to_grid(position: pg.typing.SequenceLike) -> Coordinate:
     """Return minimum (top left) point of tile containing `position`."""
-    return position[0] // TILE_SIZE * TILE_SIZE, position[1] // TILE_SIZE * TILE_SIZE
+    pos = Coordinate(position)
+    return Coordinate(pos.x // TILE_SIZE * TILE_SIZE, pos.y // TILE_SIZE * TILE_SIZE)
 
 
 def calculate_formation_positions(
     *,
-    center: Coordinate,
-    target: Coordinate | None,
+    center: pg.typing.SequenceLike,
+    target: pg.typing.SequenceLike | None,
     num_units: int,
     direction: float | None = None,
 ) -> list[Coordinate]:
@@ -82,8 +80,8 @@ def calculate_formation_positions(
     spacing = 20
     positions = []
     if direction is None and target:
-        dx, dy = target[0] - center[0], target[1] - center[1]
-        angle = math.atan2(dy, dx) if dx != 0 or dy != 0 else 0
+        d = Coordinate(target) - center
+        angle = math.atan2(d.y, d.x) if d.x != 0 or d.y != 0 else 0
     else:
         angle = direction if direction is not None else 0
 
@@ -95,5 +93,6 @@ def calculate_formation_positions(
         offset_y = (row - (max_rows - 1) / 2) * spacing
         rotated_x = offset_x * cos_a - offset_y * sin_a
         rotated_y = offset_x * sin_a + offset_y * cos_a
-        positions.append((center[0] + rotated_x, center[1] + rotated_y))
+        positions.append(Coordinate(center[0] + rotated_x, center[1] + rotated_y))
+
     return positions

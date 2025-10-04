@@ -21,15 +21,14 @@ class Building(GameObject):
     def __init__(
         self,
         *,
-        x: float,
-        y: float,
+        position: pg.typing.SequenceLike,
         team: Team,
         color: pg.Color = GDI_COLOR,
         font: pg.Font,
     ) -> None:
-        super().__init__(x=x, y=y, team=team)
+        super().__init__(position=position, team=team)
         self.image = pg.Surface(self.SIZE, pg.SRCALPHA)
-        self.rect = self.image.get_rect(topleft=(x, y))
+        self.rect = self.image.get_rect(topleft=position)
         self.font = font
         self.construction_progress = 0
         self.is_seen = False
@@ -59,8 +58,7 @@ class Building(GameObject):
             for _ in range(15):
                 particles.add(
                     Particle(
-                        self.rect.centerx,
-                        self.rect.centery,
+                        self.position,
                         random.uniform(-3, 3),
                         random.uniform(-3, 3),
                         random.randint(6, 12),
@@ -79,9 +77,6 @@ class Building(GameObject):
             self.font.render(
                 text=f"{cls_label}", antialias=True, color=(255, 255, 255)
             ),
-            (
-                camera.apply(self.rect).centerx + cls_label_offset[0],
-                camera.apply(self.rect).centery + cls_label_offset[1],
-            ),
+            camera.apply(self.rect).center + cls_label_offset,
         )
         self.draw_health_bar(surface=surface, camera=camera)

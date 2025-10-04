@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import pygame as pg
 
+from src.geometry import Coordinate
 from src.particle import Particle
 
 if TYPE_CHECKING:
@@ -16,13 +17,18 @@ if TYPE_CHECKING:
 
 class Projectile(pg.sprite.Sprite):
     SPEED: float = 6
+    HIT_RADIUS = 3
 
     def __init__(
-        self, x: float, y: float, target_unit: GameObject, damage: int, team: Team
+        self,
+        position: pg.typing.SequenceLike,
+        target_unit: GameObject,
+        damage: int,
+        team: Team,
     ) -> None:
         super().__init__()
         self.image: pg.Surface = pg.Surface((10, 5), pg.SRCALPHA)
-        self.rect: pg.Rect = self.image.get_rect(center=(x, y))
+        self.rect: pg.Rect = self.image.get_rect(center=position)
         self.target_unit = target_unit
         self.damage = damage
         self.team = team
@@ -30,15 +36,18 @@ class Projectile(pg.sprite.Sprite):
 
         pg.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))
 
+    @property
+    def position(self) -> Coordinate:
+        return Coordinate(self.rect.center)
+
     def update(self, particles: pg.sprite.Group[Any]) -> None:
         if self.target_unit and self.target_unit.health > 0:
-            dx, dy = (
-                self.target_unit.rect.centerx - self.rect.centerx,
-                self.target_unit.rect.centery - self.rect.centery,
-            )
-            dist = math.sqrt(dx**2 + dy**2)
-            if dist > 3:
-                angle = math.atan2(dy, dx)
+            if (
+                self.position.distance_to(self.target_unit.position)
+                > Projectile.HIT_RADIUS
+            ):
+                d = self.target_unit.position - self.position
+                angle = math.atan2(d.y, d.x)
                 self.image = pg.transform.rotate(
                     pg.Surface((10, 5), pg.SRCALPHA), -math.degrees(angle)
                 )
@@ -48,8 +57,7 @@ class Projectile(pg.sprite.Sprite):
                 if self.particle_timer <= 0:
                     particles.add(
                         Particle(
-                            self.rect.centerx,
-                            self.rect.centery,
+                            self.position,
                             -math.cos(angle) * random.uniform(0.5, 1.5),
                             -math.sin(angle) * random.uniform(0.5, 1.5),
                             5,
@@ -65,8 +73,7 @@ class Projectile(pg.sprite.Sprite):
                 for _ in range(5):
                     particles.add(
                         Particle(
-                            self.rect.centerx,
-                            self.rect.centery,
+                            self.position,
                             random.uniform(-2, 2),
                             random.uniform(-2, 2),
                             6,
