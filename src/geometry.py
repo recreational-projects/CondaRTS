@@ -10,7 +10,8 @@ from src.constants import BUILDING_CONSTRUCTION_RANGE, TILE_SIZE
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from CondaRTS import Building, Team
+    from src.building import Building
+    from src.constants import Team
 
 type Coordinate = tuple[float, float]
 

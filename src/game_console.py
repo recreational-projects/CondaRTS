@@ -33,16 +33,18 @@ class GameConsole:
         if len(self.lines) > self.MAX_LINES:
             self.lines.pop(0)
 
-    def draw(self, screen: pg.Surface) -> None:
-        pg.draw.rect(screen, (40, 40, 40), self.rect)  # Darker console
-        pg.draw.rect(screen, (80, 80, 80), self.rect, 2)
+    def draw(self, *, surface: pg.Surface) -> None:
+        pg.draw.rect(surface, (40, 40, 40), self.rect)  # Darker console
+        pg.draw.rect(surface, (80, 80, 80), self.rect, 2)
         visible_lines = self.lines[self.scroll_offset :]
         for i, line in enumerate(visible_lines):
             if i >= self.MAX_LINES:
                 break
 
-            text_surface = self.font.render(line, True, (200, 200, 200))
-            screen.blit(text_surface, (self.rect.x + 5, self.rect.y + 5 + i * 18))
+            text_surface = self.font.render(
+                text=line, antialias=True, color=(200, 200, 200)
+            )
+            surface.blit(text_surface, (self.rect.x + 5, self.rect.y + 5 + i * 18))
 
         scroll_height = self.rect.height - 20
         scroll_pos = (
@@ -52,7 +54,7 @@ class GameConsole:
             else 0
         )
         pg.draw.rect(
-            screen,
+            surface,
             (150, 150, 150),
             (self.rect.right - 15, self.rect.y + 5 + scroll_pos, 10, 20),
         )

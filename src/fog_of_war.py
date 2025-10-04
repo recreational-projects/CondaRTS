@@ -9,9 +9,9 @@ import pygame as pg
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from CondaRTS import Team
     from src.building import Building
     from src.camera import Camera
+    from src.constants import Team
     from src.game_object import GameObject
     from src.geometry import Coordinate
 
@@ -101,7 +101,7 @@ class FogOfWar:
 
         return False
 
-    def draw(self, surface_: pg.Surface, camera: Camera) -> None:
+    def draw(self, *, surface: pg.Surface, camera: Camera) -> None:
         """Draw opaque and semi-transparent fog tiles to `surface`.
 
         NB: drawn over buildings; under units.
@@ -121,4 +121,4 @@ class FogOfWar:
                         ),
                     )
 
-        surface_.blit(self.surface, (-camera.rect.x, -camera.rect.y))
+        surface.blit(self.surface, (-camera.rect.x, -camera.rect.y))

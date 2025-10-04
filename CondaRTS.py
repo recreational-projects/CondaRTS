@@ -204,30 +204,27 @@ def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
     surface_.blit(base_map, (-camera.rect.x, -camera.rect.y))
     for field in iron_fields:
         if field.resources > 0 and fog_of_war.is_explored(field.rect.center):
-            field.draw(surface_=surface_, camera=camera, font=font_)
+            field.draw(surface=surface_, camera=camera)
 
     for building in global_buildings:
         if building.health > 0 and (
             fog_of_war.is_visible(building.rect.center)
             or (building.is_seen and fog_of_war.is_explored(building.rect.center))
         ):
-            building.draw(surface_, camera)
+            building.draw(surface=surface_, camera=camera)
 
-    fog_of_war.draw(surface_, camera)
+    fog_of_war.draw(surface=surface_, camera=camera)
     for unit in global_units:
         if unit.team == Team.GDI or fog_of_war.is_visible(unit.rect.center):
-            if isinstance(unit, Harvester):
-                unit.draw(surface=surface_, camera=camera, font=font)
-            else:
-                unit.draw(surface_, camera)
+            unit.draw(surface=surface_, camera=camera)
 
     for projectile in projectiles:
         if projectile.team == Team.GDI or fog_of_war.is_visible(projectile.rect.center):
-            projectile.draw(surface_, camera)
+            projectile.draw(surface=surface_, camera=camera)
 
     for particle in particles:
         if fog_of_war.is_visible(particle.rect.center):
-            particle.draw(surface_, camera)
+            particle.draw(surface=surface_, camera=camera)
 
     interface.draw(
         surface_=surface_,
@@ -237,7 +234,7 @@ def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
     if selecting and select_rect:
         pg.draw.rect(surface_, (255, 255, 255), select_rect, 2)
 
-    console.draw(surface_)
+    console.draw(surface=surface_)
 
 
 @dataclass(kw_only=True)
@@ -579,7 +576,7 @@ if __name__ == "__main__":
     pg.init()
     screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     clock = pg.time.Clock()
-    font = pg.font.SysFont(None, 24)
+    base_font = pg.font.SysFont(None, 24)
 
     player_units: pg.sprite.Group = pg.sprite.Group()
     ai_units: pg.sprite.Group = pg.sprite.Group()
@@ -594,7 +591,7 @@ if __name__ == "__main__":
     nod_hq = Headquarters(x=MAP_WIDTH - 300, y=MAP_HEIGHT - 300, team=Team.NOD)
     nod_hq.iron = 1500
     interface = ProductionInterface(
-        hq=gdi_hq, all_buildings=global_buildings, font=font
+        hq=gdi_hq, all_buildings=global_buildings, font=base_font
     )
     console = GameConsole()
     fog_of_war = FogOfWar(map_size=(MAP_WIDTH, MAP_HEIGHT), tile_size=TILE_SIZE)
@@ -623,21 +620,22 @@ if __name__ == "__main__":
     player_units.add(Infantry(350, 300, Team.GDI))
     player_units.add(Infantry(370, 300, Team.GDI))
     player_units.add(Infantry(390, 300, Team.GDI))
-    player_units.add(Harvester(400, 400, Team.GDI, gdi_hq))
+    player_units.add(Harvester(400, 400, Team.GDI, gdi_hq, font=base_font))
 
     ai_units.add(Infantry(2050, 1200, Team.NOD))
     ai_units.add(Infantry(2070, 1200, Team.NOD))
     ai_units.add(Infantry(2090, 1200, Team.NOD))
-    ai_units.add(Harvester(2200, 1300, Team.NOD, nod_hq))
+    ai_units.add(Harvester(2200, 1300, Team.NOD, nod_hq, font=base_font))
 
     global_units.add(player_units, ai_units)
     global_buildings.add(gdi_hq, nod_hq)
     for _ in range(40):
         iron_fields.add(
             IronField(
-                random.randint(100, MAP_WIDTH - 100),
-                random.randint(100, MAP_HEIGHT - 100),
-            )
+                x=random.randint(100, MAP_WIDTH - 100),
+                y=random.randint(100, MAP_HEIGHT - 100),
+                font=base_font,
+            ),
         )
 
     running = True
@@ -867,7 +865,7 @@ if __name__ == "__main__":
             all_buildings=global_buildings,
         )
         fog_of_war.update_visibility(player_units, global_buildings, Team.GDI)
-        draw(surface_=screen, font_=font)
+        draw(surface_=screen, font_=base_font)
         for unit in global_units:
             unit.under_attack = False
 

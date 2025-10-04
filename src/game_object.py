@@ -8,8 +8,8 @@ import pygame as pg
 from src.constants import MAP_HEIGHT, MAP_WIDTH
 
 if TYPE_CHECKING:
-    from CondaRTS import Team
     from src.camera import Camera
+    from src.constants import Team
     from src.geometry import Coordinate
 
 
@@ -74,7 +74,7 @@ class GameObject(pg.sprite.Sprite):
         if self.cooldown_timer > 0:
             self.cooldown_timer -= 1
 
-    def draw_health_bar(self, surface_: pg.Surface, camera: Camera) -> None:
+    def draw_health_bar(self, *, surface: pg.Surface, camera: Camera) -> None:
         health_ratio = self.health / self.max_health
         if not self.under_attack and health_ratio == 1.0:
             return
@@ -83,13 +83,13 @@ class GameObject(pg.sprite.Sprite):
         bar_width = max(10, int(self.rect.width * health_ratio))
         screen_rect = camera.apply(self.rect)
         pg.draw.rect(
-            surface_,
+            surface,
             (0, 0, 0),
             (screen_rect.x - 1, screen_rect.y - 16, self.rect.width + 2, 10),
         )  # Background
-        pg.draw.rect(surface_, color, (screen_rect.x, screen_rect.y - 15, bar_width, 8))
+        pg.draw.rect(surface, color, (screen_rect.x, screen_rect.y - 15, bar_width, 8))
         pg.draw.rect(
-            surface_,
+            surface,
             (255, 255, 255),
             (screen_rect.x, screen_rect.y - 15, self.rect.width, 8),
             1,

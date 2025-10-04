@@ -10,8 +10,8 @@ from src.game_object import GameObject
 from src.particle import Particle
 
 if TYPE_CHECKING:
-    from CondaRTS import Team
     from src.camera import Camera
+    from src.constants import Team
 
 
 class Building(GameObject):
@@ -68,6 +68,6 @@ class Building(GameObject):
                 )
             self.kill()
 
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
-        self.draw_health_bar(screen, camera)
+    def draw(self, *, surface: pg.Surface, camera: Camera) -> None:
+        surface.blit(self.image, camera.apply(self.rect).topleft)
+        self.draw_health_bar(surface=surface, camera=camera)

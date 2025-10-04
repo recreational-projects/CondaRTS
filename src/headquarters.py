@@ -91,7 +91,7 @@ class Headquarters(Building):
             )
             return self.BASE_PRODUCTION_TIME * (0.9**barracks_count)
 
-        elif unit_class in [Tank, Harvester]:
+        if unit_class in [Tank, Harvester]:
             warfactory_count = len(
                 [
                     b
@@ -224,7 +224,3 @@ class Headquarters(Building):
                         b for b in all_buildings if b.team == self.team
                     ],
                 )
-
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
-        self.draw_health_bar(screen, camera)
