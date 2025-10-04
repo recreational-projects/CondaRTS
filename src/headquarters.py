@@ -26,7 +26,6 @@ if TYPE_CHECKING:
 
     import pygame as pg
 
-    from src.camera import Camera
     from src.game_object import GameObject
     from src.geometry import Coordinate
     from src.particle import Particle
@@ -38,12 +37,13 @@ class Headquarters(Building):
     BASE_PRODUCTION_TIME = 180
     BASE_POWER = 300
 
-    def __init__(self, *, x: float, y: float, team: Team) -> None:
+    def __init__(self, *, x: float, y: float, team: Team, font: pg.Font) -> None:
         super().__init__(
             x=x,
             y=y,
             team=team,
             color=GDI_COLOR if team == Team.GDI else NOD_COLOR,
+            font=font,
         )
         self.max_health = 1200
         self.health = self.max_health
@@ -174,7 +174,13 @@ class Headquarters(Building):
                         spawn_building.rect.centery,
                     )
                     new_units = [
-                        Harvester(spawn_x, spawn_y, self.team, self)
+                        Harvester(
+                            x=spawn_x,
+                            y=spawn_y,
+                            team=self.team,
+                            hq=self,
+                            font=self.font,
+                        )
                         if unit_cls == Harvester
                         else unit_cls(x=spawn_x, y=spawn_y, team=self.team)
                     ]
@@ -214,7 +220,7 @@ class Headquarters(Building):
             new_building_cls=unit_cls,
             buildings=all_buildings,
         ):
-            all_buildings.add(unit_cls(x=x, y=y, team=self.team))
+            all_buildings.add(unit_cls(x=x, y=y, team=self.team, font=self.font))
             self.pending_building = None
             self.pending_building_pos = None
             if self.production_queue and self.has_enough_power:

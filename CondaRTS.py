@@ -587,8 +587,10 @@ if __name__ == "__main__":
     particles: pg.sprite.Group = pg.sprite.Group()
     selected_units: pg.sprite.Group = pg.sprite.Group()
 
-    gdi_hq = Headquarters(x=300, y=300, team=Team.GDI)
-    nod_hq = Headquarters(x=MAP_WIDTH - 300, y=MAP_HEIGHT - 300, team=Team.NOD)
+    gdi_hq = Headquarters(x=300, y=300, team=Team.GDI, font=base_font)
+    nod_hq = Headquarters(
+        x=MAP_WIDTH - 300, y=MAP_HEIGHT - 300, team=Team.NOD, font=base_font
+    )
     nod_hq.iron = 1500
     interface = ProductionInterface(
         hq=gdi_hq, all_buildings=global_buildings, font=base_font

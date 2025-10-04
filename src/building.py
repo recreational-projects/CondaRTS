@@ -25,10 +25,12 @@ class Building(GameObject):
         y: float,
         team: Team,
         color: pg.Color = GDI_COLOR,
+        font: pg.Font,
     ) -> None:
         super().__init__(x=x, y=y, team=team)
         self.image = pg.Surface(self.SIZE, pg.SRCALPHA)
         self.rect = self.image.get_rect(topleft=(x, y))
+        self.font = font
         self.construction_progress = 0
         self.is_seen = False
 
@@ -69,5 +71,17 @@ class Building(GameObject):
             self.kill()
 
     def draw(self, *, surface: pg.Surface, camera: Camera) -> None:
+        """Draw the building, and label with first letter of class."""
         surface.blit(self.image, camera.apply(self.rect).topleft)
+        cls_label = self.__class__.__name__[0]
+        cls_label_offset = -5, -2
+        surface.blit(
+            self.font.render(
+                text=f"{cls_label}", antialias=True, color=(255, 255, 255)
+            ),
+            (
+                camera.apply(self.rect).centerx + cls_label_offset[0],
+                camera.apply(self.rect).centery + cls_label_offset[1],
+            ),
+        )
         self.draw_health_bar(surface=surface, camera=camera)
