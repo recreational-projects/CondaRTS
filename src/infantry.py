@@ -47,10 +47,10 @@ class Infantry(GameObject):
             )
             self.target_unit = self.target_unit if self.target else None
 
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
+    def draw(self, *, surface: pg.Surface, camera: Camera) -> None:
+        surface.blit(self.image, camera.apply(self.rect).topleft)
         if self.selected:
             pg.draw.circle(
-                screen, (255, 255, 255), camera.apply(self.rect).center, 10, 2
+                surface, (255, 255, 255), camera.apply(self.rect).center, 10, 2
             )
-        self.draw_health_bar(screen, camera)
+        self.draw_health_bar(surface=surface, camera=camera)

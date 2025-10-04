@@ -217,7 +217,8 @@ class AI:
                             < 600
                         ):
                             return x, y
-                        elif not closest_field:
+
+                        if not closest_field:
                             return x, y
 
         return snap_to_grid(self.hq.rect.center)
@@ -285,11 +286,11 @@ class AI:
             self._produce_obj(Barracks)
             return
 
-        elif not has_warfactory and iron >= WarFactory.COST:
+        if not has_warfactory and iron >= WarFactory.COST:
             self._produce_obj(WarFactory)
             return
 
-        elif (
+        if (
             self.hq.has_enough_power
             and iron >= PowerPlant.COST
             and current_units["power_plant"] < desired_units["power_plant"]

@@ -11,12 +11,13 @@ class PowerPlant(Building):
     POWER_OUTPUT = 100
     POWER_USAGE = 0
 
-    def __init__(self, *, x: float, y: float, team: Team) -> None:
+    def __init__(self, *, x: float, y: float, team: Team, font: pg.Font) -> None:
         super().__init__(
             x=x,
             y=y,
             team=team,
             color=pg.Color(130, 130, 0) if team == Team.GDI else pg.Color(130, 0, 0),
+            font=font,
         )
         self.max_health = 500
         self.health = self.max_health

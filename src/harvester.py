@@ -11,9 +11,9 @@ from src.infantry import Infantry
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from CondaRTS import Headquarters
     from src.camera import Camera
     from src.constants import Team
+    from src.headquarters import Headquarters
     from src.iron_field import IronField
 
 
@@ -21,16 +21,19 @@ class Harvester(GameObject):
     COST = 800
     POWER_USAGE = 20
 
-    def __init__(self, x: float, y: float, team: Team, hq: Headquarters) -> None:
+    def __init__(
+        self, x: float, y: float, team: Team, hq: Headquarters, font: pg.Font
+    ) -> None:
         super().__init__(x=x, y=y, team=team)
         self.image = pg.Surface((50, 30), pg.SRCALPHA)
         self.rect = self.image.get_rect(center=(x, y))
+        self.hq = hq
+        self.font = font
         self.speed = 2.5
         self.health = 300
         self.max_health = self.health
         self.capacity = 100
         self.iron = 0
-        self.hq = hq
         self.state = "moving_to_field"
         self.target_field: IronField | None = None
         self.harvest_time = 40
@@ -128,14 +131,16 @@ class Harvester(GameObject):
                 self.state = "moving_to_field"
                 self.target = None
 
-    def draw(self, surface: pg.Surface, camera: Camera, font: pg.Font) -> None:
+    def draw(self, *, surface: pg.Surface, camera: Camera) -> None:
         surface.blit(self.image, camera.apply(self.rect).topleft)
         if self.selected:
             pg.draw.rect(surface, (255, 255, 255), camera.apply(self.rect), 2)
 
-        self.draw_health_bar(surface, camera)
+        self.draw_health_bar(surface=surface, camera=camera)
         if self.iron > 0:
             surface.blit(
-                font.render(f"Iron: {self.iron}", True, (255, 255, 255)),
+                self.font.render(
+                    text=f"Iron: {self.iron}", antialias=True, color=(255, 255, 255)
+                ),
                 (camera.apply(self.rect).x, camera.apply(self.rect).y - 35),
             )

@@ -22,12 +22,13 @@ class Turret(Building):
     POWER_USAGE = 25
     SIZE = 50, 50
 
-    def __init__(self, *, x: float, y: float, team: Team) -> None:
+    def __init__(self, *, x: float, y: float, team: Team, font: pg.Font) -> None:
         super().__init__(
             x=x,
             y=y,
             team=team,
             color=pg.Color(180, 180, 0) if team == Team.GDI else pg.Color(180, 0, 0),
+            font=font,
         )
         self.max_health = 500
         self.health = self.max_health

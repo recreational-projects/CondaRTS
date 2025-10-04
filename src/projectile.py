@@ -77,5 +77,5 @@ class Projectile(pg.sprite.Sprite):
         else:
             self.kill()
 
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
+    def draw(self, *, surface: pg.Surface, camera: Camera) -> None:
+        surface.blit(self.image, camera.apply(self.rect).topleft)

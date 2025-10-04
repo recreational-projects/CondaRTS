@@ -18,8 +18,10 @@ dev = [
 select = [
     "ANN",  # flake8-annotations
     "F",  # Pyflakes
+    "FBT",  # flake8-boolean-trap
     "I",  # isort
     "TC",  # flake8-type-checking
+    "RET",  # flake8-return
     "UP",  # pyupgrade
 ]
 ignore = [

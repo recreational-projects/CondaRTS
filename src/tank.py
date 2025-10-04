@@ -76,15 +76,15 @@ class Tank(GameObject):
             if self.recoil > 0:
                 self.recoil -= 1
 
-    def draw(self, screen: pg.Surface, camera: Camera) -> None:
-        screen.blit(self.image, camera.apply(self.rect).topleft)
+    def draw(self, *, surface: pg.Surface, camera: Camera) -> None:
+        surface.blit(self.image, camera.apply(self.rect).topleft)
         if self.selected:
             pg.draw.circle(
-                screen,
+                surface,
                 (255, 255, 255),
                 camera.apply(self.rect).center,
                 self.rect.width // 2 + 2,
                 2,
             )  # Circular selection
 
-        self.draw_health_bar(screen, camera)
+        self.draw_health_bar(surface=surface, camera=camera)
