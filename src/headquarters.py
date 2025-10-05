@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.barracks import Barracks
 from src.building import Building
@@ -28,7 +28,6 @@ if TYPE_CHECKING:
 
     from src.game_object import GameObject
     from src.geometry import Coordinate
-    from src.particle import Particle
 
 
 class Headquarters(Building):
@@ -105,10 +104,10 @@ class Headquarters(Building):
 
     def update(
         self,
-        particles: pg.sprite.Group[Particle],
-        friendly_units: pg.sprite.Group[GameObject],
-        friendly_buildings: Iterable[Building],
-        all_units: pg.sprite.Group[GameObject],
+        particles: pg.sprite.Group[Any],
+        friendly_units: pg.sprite.Group[Any],
+        friendly_buildings: Iterable[Any],
+        all_units: pg.sprite.Group[Any],
         *args,
         **kwargs,
     ) -> None:
@@ -211,7 +210,7 @@ class Headquarters(Building):
         x: float,
         y: float,
         unit_cls: type[Building],
-        all_buildings: pg.sprite.Group[Building],
+        all_buildings: pg.sprite.Group[Any],
     ) -> None:
         snap_x, snap_y = snap_to_grid((x, y))
         if is_valid_building_position(

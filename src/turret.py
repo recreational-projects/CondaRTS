@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pygame as pg
 
@@ -41,8 +41,8 @@ class Turret(Building):
 
     def update(
         self,
-        particles: pg.sprite.Group[Particle],
-        projectiles: pg.sprite.Group[Projectile],
+        particles: pg.sprite.Group[Any],
+        projectiles: pg.sprite.Group[Any],
         enemy_units: Iterable[GameObject],
         *args,
         **kwargs,

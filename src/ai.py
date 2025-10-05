@@ -4,7 +4,7 @@ import math
 import random
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from src.barracks import Barracks
 from src.constants import (
@@ -238,7 +238,7 @@ class AI:
         enemy_unit_counts: dict[str, int],
         enemy_buildings: Iterable[Building],
         iron_fields: Iterable[IronField],
-        all_buildings: pg.sprite.Group[Building],
+        all_buildings: pg.sprite.Group[Any],
     ) -> None:
         current_units = {
             "harvester": len([u for u in friendly_units if isinstance(u, Harvester)]),
@@ -553,7 +553,7 @@ class AI:
         enemy_units: Sequence[GameObject],
         enemy_buildings: Sequence[Building],
         iron_fields: Iterable[IronField],
-        all_buildings: pg.sprite.Group[Building],
+        all_buildings: pg.sprite.Group[Any],
     ) -> None:
         player_unit_counts = self._enemy_unit_counts(
             enemy_units=enemy_units, enemy_buildings=enemy_buildings

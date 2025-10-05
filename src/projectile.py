@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pygame as pg
 
@@ -30,7 +30,7 @@ class Projectile(pg.sprite.Sprite):
 
         pg.draw.ellipse(self.image, (255, 200, 0), (0, 0, 10, 5))
 
-    def update(self, particles: pg.sprite.Group[Particle]) -> None:
+    def update(self, particles: pg.sprite.Group[Any]) -> None:
         if self.target_unit and self.target_unit.health > 0:
             dx, dy = (
                 self.target_unit.rect.centerx - self.rect.centerx,

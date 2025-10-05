@@ -4,7 +4,7 @@ import math
 import random
 from dataclasses import InitVar, dataclass
 from dataclasses import field as dataclass_field
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pygame as pg
 
@@ -74,8 +74,8 @@ def handle_attacks(
     team_units: Iterable[GameObject],
     all_units: Iterable[GameObject],
     all_buildings: Iterable[Building],
-    projectiles: pg.sprite.Group[Projectile],
-    particles: pg.sprite.Group[Particle],
+    projectiles: pg.sprite.Group[Any],
+    particles: pg.sprite.Group[Any],
 ) -> None:
     for unit in team_units:
         if isinstance(unit, (Tank, Infantry)) and unit.cooldown_timer == 0:
@@ -277,7 +277,13 @@ class ProductionInterface:
     tab_buttons: dict[str, pg.Rect] = dataclass_field(init=False, default_factory=dict)
     buy_buttons: dict[
         str,
-        dict[type[GameObject], tuple[pg.Rect, Callable]],
+        dict[
+            type[GameObject],
+            tuple[
+                pg.Rect,
+                Callable,
+            ],
+        ],
     ] = dataclass_field(init=False, default_factory=dict)
     sell_button: pg.Rect = dataclass_field(init=False)
     current_tab = "Units"

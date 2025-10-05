@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pygame as pg
 
@@ -48,7 +48,7 @@ class Building(GameObject):
         for i in range(10, self.SIZE[0] - 10, 20):
             pg.draw.rect(self.image, (200, 200, 200), (i, 10, 10, 10))  # Windows
 
-    def update(self, particles: pg.sprite.Group[Particle], *args, **kwargs) -> None:
+    def update(self, particles: pg.sprite.Group[Any], *args, **kwargs) -> None:
         if self.construction_progress < self.CONSTRUCTION_TIME:
             self.construction_progress += 1
             self.image.set_alpha(
