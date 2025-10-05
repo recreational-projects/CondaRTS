@@ -201,9 +201,9 @@ class AI:
                 for angle in range(0, 360, 20):
                     x = building.rect.centerx + math.cos(math.radians(angle)) * 120
                     y = building.rect.centery + math.sin(math.radians(angle)) * 120
-                    snapped_position = snap_to_grid((x, y))
+                    snapped_pos = snap_to_grid((x, y))
                     if is_valid_building_position(
-                        position=snapped_position,
+                        position=snapped_pos,
                         team=self.hq.team,
                         new_building_cls=building_cls,
                         buildings=list(friendly_buildings) + list(enemy_buildings),
@@ -211,15 +211,15 @@ class AI:
                         if (
                             closest_field
                             and math.sqrt(
-                                (x - closest_field.rect.centerx) ** 2
-                                + (y - closest_field.rect.centery) ** 2
+                                (snapped_pos[0] - closest_field.rect.centerx) ** 2
+                                + (snapped_pos[1] - closest_field.rect.centery) ** 2
                             )
                             < 600
                         ):
-                            return x, y
+                            return snapped_pos
 
                         if not closest_field:
-                            return x, y
+                            return snapped_pos
 
         return snap_to_grid(self.hq.rect.center)
 
