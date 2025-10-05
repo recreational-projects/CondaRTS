@@ -213,14 +213,16 @@ class Headquarters(Building):
         unit_cls: type[Building],
         all_buildings: pg.sprite.Group[Building],
     ) -> None:
-        snapped_position = snap_to_grid((x, y))
+        snap_x, snap_y = snap_to_grid((x, y))
         if is_valid_building_position(
-            position=snapped_position,
+            position=(snap_x, snap_y),
             team=self.team,
             new_building_cls=unit_cls,
             buildings=all_buildings,
         ):
-            all_buildings.add(unit_cls(x=x, y=y, team=self.team, font=self.font))
+            all_buildings.add(
+                unit_cls(x=snap_x, y=snap_y, team=self.team, font=self.font)
+            )
             self.pending_building = None
             self.pending_building_pos = None
             if self.production_queue and self.has_enough_power:
