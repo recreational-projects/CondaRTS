@@ -32,7 +32,8 @@ class Building(GameObject):
         self.rect = self.image.get_rect(topleft=position)
         self.font = font
         self.construction_progress = 0
-        self.is_seen = False
+        self.is_explored = False
+        """Controls whether AI building is drawn."""
 
         # Add details to building
         pg.draw.rect(self.image, color, ((0, 0), self.SIZE))  # Base

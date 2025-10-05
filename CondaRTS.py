@@ -185,6 +185,10 @@ def handle_projectiles(
 
 
 def draw(surface_: pg.Surface) -> None:
+    """Draw entire game to `surface_`.
+
+    Uses global state.
+    """
     surface_.fill(pg.Color("black"))
     surface_.blit(base_map, (-camera.rect.x, -camera.rect.y))
     for field in iron_fields:
@@ -192,10 +196,7 @@ def draw(surface_: pg.Surface) -> None:
             field.draw(surface=surface_, camera=camera)
 
     for building in global_buildings:
-        if building.health > 0 and (
-            fog_of_war.is_visible(building.position)
-            or (building.is_seen and fog_of_war.is_explored(building.position))
-        ):
+        if building.health > 0 and (building.team == Team.GDI or building.is_explored):
             building.draw(surface=surface_, camera=camera)
 
     fog_of_war.draw(surface=surface_, camera=camera)
@@ -587,7 +588,7 @@ if __name__ == "__main__":
         hq=gdi_hq, all_buildings=global_buildings, font=base_font
     )
     console = GameConsole()
-    fog_of_war = FogOfWar(map_size=(MAP_WIDTH, MAP_HEIGHT), tile_size=TILE_SIZE)
+    fog_of_war = FogOfWar()
 
     selected_building = None
     selecting = False
@@ -850,15 +851,22 @@ if __name__ == "__main__":
             all_units=global_units,
             all_buildings=global_buildings,
         )
+        player_buildings = [b for b in global_buildings if b.team == Team.GDI]
         ai.update(
             friendly_units=ai_units.sprites(),
             friendly_buildings=[b for b in global_buildings if b.team != Team.GDI],
             enemy_units=player_units.sprites(),
-            enemy_buildings=[b for b in global_buildings if b.team == Team.GDI],
+            enemy_buildings=player_buildings,
             iron_fields=iron_fields.sprites(),
             all_buildings=global_buildings,
         )
-        fog_of_war.update_visibility(player_units, global_buildings, Team.GDI)
+        # AI units and buildings are indirectly manipulated here
+        fog_of_war.update(units=player_units, buildings=player_buildings)
+        ai_buildings = [b for b in global_buildings if b.team != Team.GDI]
+        for building in ai_buildings:
+            if building.health > 0 and fog_of_war.is_explored(building.position):
+                building.is_explored = True
+
         draw(surface_=screen)
         for unit in global_units:
             unit.under_attack = False
