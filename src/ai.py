@@ -412,7 +412,7 @@ class AI:
                 self._produce_obj(random.choice(production_options))
 
         elif (
-            self.state == "Broke"
+            self.state == "BROKE"
             and has_warfactory
             and iron >= Harvester.COST
             and current_units["harvester"]
@@ -465,9 +465,9 @@ class AI:
             return
         tactics = (
             ["balanced", "flank", "all_in"]
-            if self.state == "Aggressive" or surprise
+            if self.state == "AGGRESSIVE" or surprise
             else ["all_in", "defensive"]
-            if self.state in ["Threatened", "Attacked"]
+            if self.state in ["THREATENED", "ATTACKED"]
             else ["balanced", "flank", "all_in"]
         )
         tactic = random.choice(tactics)

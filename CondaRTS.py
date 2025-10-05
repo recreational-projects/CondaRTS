@@ -199,7 +199,7 @@ def handle_projectiles(
                 break
 
 
-def draw(*, surface_: pg.Surface, font_: pg.Font) -> None:
+def draw(surface_: pg.Surface) -> None:
     surface_.fill(pg.Color("black"))
     surface_.blit(base_map, (-camera.rect.x, -camera.rect.y))
     for field in iron_fields:
@@ -867,7 +867,7 @@ if __name__ == "__main__":
             all_buildings=global_buildings,
         )
         fog_of_war.update_visibility(player_units, global_buildings, Team.GDI)
-        draw(surface_=screen, font_=base_font)
+        draw(surface_=screen)
         for unit in global_units:
             unit.under_attack = False
 

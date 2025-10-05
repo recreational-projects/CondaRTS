@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import pygame as pg
 
@@ -34,7 +34,9 @@ class Harvester(GameObject):
         self.max_health = self.health
         self.capacity = 100
         self.iron = 0
-        self.state = "moving_to_field"
+        self.state: Literal["HARVESTING", "MOVING_TO_FIELD", "RETURNING_TO_HQ"] = (
+            "MOVING_TO_FIELD"
+        )
         self.target_field: IronField | None = None
         self.harvest_time = 40
         self.attack_range = 50
@@ -68,7 +70,7 @@ class Harvester(GameObject):
                     closest_target.kill()
                 self.cooldown_timer = self.attack_cooldown
 
-        if self.state == "moving_to_field":
+        if self.state == "MOVING_TO_FIELD":
             if not self.target_field or self.target_field.resources <= 0:
                 rich_fields = [f for f in iron_fields if f.resources >= 1000]
                 if rich_fields:
@@ -97,11 +99,11 @@ class Harvester(GameObject):
                     )
                     < 30
                 ):
-                    self.state = "harvesting"
+                    self.state = "HARVESTING"
                     self.target = None
                     self.harvest_time = 40
 
-        elif self.state == "harvesting":
+        elif self.state == "HARVESTING":
             if self.harvest_time > 0:
                 self.harvest_time -= 1
             else:
@@ -112,12 +114,14 @@ class Harvester(GameObject):
                 harvested = min(self.target_field.resources, self.capacity)
                 self.iron += harvested
                 self.target_field.resources -= harvested
-                self.state = "returning"
+                self.state = "RETURNING_TO_HQ"
                 self.target = self.hq.rect.center
 
-        elif self.state == "returning":
+        elif self.state == "RETURNING_TO_HQ":
             if not self.target:
-                raise TypeError("No target field")  # Temporary handling, review later
+                raise TypeError(
+                    f"Harvester RETURNING_TO_HQ has no target.\n{self}"
+                )  # Temporary handling, review later
 
             if (
                 math.sqrt(
@@ -128,7 +132,7 @@ class Harvester(GameObject):
             ):
                 self.hq.iron += self.iron
                 self.iron = 0
-                self.state = "moving_to_field"
+                self.state = "MOVING_TO_FIELD"
                 self.target = None
 
     def draw(self, *, surface: pg.Surface, camera: Camera) -> None:
