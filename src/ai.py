@@ -4,7 +4,7 @@ import math
 import random
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from src.barracks import Barracks
 from src.constants import (
@@ -12,6 +12,7 @@ from src.constants import (
     MAP_WIDTH,
 )
 from src.geometry import (
+    Coordinate,
     is_valid_building_position,
     snap_to_grid,
 )
@@ -31,7 +32,6 @@ if TYPE_CHECKING:
     from src.building import Building
     from src.game_console import GameConsole
     from src.game_object import GameObject
-    from src.geometry import Coordinate
     from src.iron_field import IronField
 
 
@@ -42,6 +42,8 @@ class AI:
     ACTION_INTERVAL = 50
     MAX_WAVE_SIZE = 25
     SCOUT_INTERVAL = 200
+    THREAT_RANGE = 500
+    """THREATENED state allowed if any enemy unit is within this distance."""
 
     hq: Headquarters
     console: GameConsole
@@ -93,12 +95,7 @@ class AI:
             if self.hq.health < self.hq.max_health * 0.6 or self.defense_cooldown > 0
             else "THREATENED"
             if any(
-                math.sqrt(
-                    (u.rect.centerx - self.hq.rect.centerx) ** 2
-                    + (u.rect.centery - self.hq.rect.centery) ** 2
-                )
-                < 500
-                for u in enemy_units
+                u.distance_to(self.hq.position) < AI.THREAT_RANGE for u in enemy_units
             )
             else "AGGRESSIVE"
             if self.wave_number >= 2 or player_base_size > 8
@@ -114,14 +111,14 @@ class AI:
     ) -> None:
         if self.last_scout_update <= 0:
             if not self.scout_targets:
-                self.scout_targets = [f.rect.center for f in iron_fields]
-                self.scout_targets.append((MAP_WIDTH // 2, MAP_HEIGHT // 2))
+                self.scout_targets = [f.position for f in iron_fields]
+                self.scout_targets.append(Coordinate(MAP_WIDTH // 2, MAP_HEIGHT // 2))
                 gdi_hq = next(
                     (b for b in enemy_buildings if isinstance(b, Headquarters)),
                     None,
                 )
                 if gdi_hq:
-                    self.scout_targets.append(gdi_hq.rect.center)
+                    self.scout_targets.append(gdi_hq.position)
 
             for scout in [
                 u for u in friendly_units if isinstance(u, Infantry) and not u.target
@@ -142,40 +139,35 @@ class AI:
         enemy_units: Iterable[GameObject],
         enemy_buildings: Iterable[Building],
     ) -> Building | GameObject | None:
+        """Return a target object for `unit`, or None."""
         targets = []
-        for u in enemy_units:
-            if u.health > 0:
-                dist = math.sqrt(
-                    (unit.rect.centerx - u.rect.centerx) ** 2
-                    + (unit.rect.centery - u.rect.centery) ** 2
-                )
+        for enemy_unit in enemy_units:
+            if enemy_unit.health > 0:
+                dist = unit.distance_to(enemy_unit.position)
                 priority = (
                     3
-                    if isinstance(u, Harvester)
+                    if isinstance(enemy_unit, Harvester)
                     else 2.5
-                    if isinstance(u, Headquarters)
+                    if isinstance(enemy_unit, Headquarters)
                     else 2
-                    if isinstance(u, Turret)
+                    if isinstance(enemy_unit, Turret)
                     else 1.5
-                    if u.health / u.max_health < 0.3
+                    if enemy_unit.health / enemy_unit.max_health < 0.3
                     else 1
                 )
-                targets.append((u, dist, priority))
+                targets.append((enemy_unit, dist, priority))
 
-        for b in enemy_buildings:
-            if b.health > 0:
-                dist = math.sqrt(
-                    (unit.rect.centerx - b.rect.centerx) ** 2
-                    + (unit.rect.centery - b.rect.centery) ** 2
-                )
+        for enemy_building in enemy_buildings:
+            if enemy_building.health > 0:
+                dist = unit.distance_to(enemy_building.position)
                 priority = (
                     2.5
-                    if isinstance(b, Headquarters)
+                    if isinstance(enemy_building, Headquarters)
                     else 2
-                    if isinstance(b, Turret)
+                    if isinstance(enemy_building, Turret)
                     else 1
                 )
-                targets.append((b, dist, priority))
+                targets.append((enemy_building, dist, priority))
 
         targets.sort(key=lambda x: x[1] / x[2])
         return targets[0][0] if targets and targets[0][1] < 250 else None
@@ -190,18 +182,17 @@ class AI:
     ) -> Coordinate:
         closest_field = min(
             iron_fields,
-            key=lambda f: math.sqrt(
-                (f.rect.centerx - self.hq.rect.centerx) ** 2
-                + (f.rect.centery - self.hq.rect.centery) ** 2
-            ),
+            key=lambda f: self.hq.distance_to(f.position),
             default=None,
         )
         for building in friendly_buildings:
             if building.health > 0:
                 for angle in range(0, 360, 20):
-                    x = building.rect.centerx + math.cos(math.radians(angle)) * 120
-                    y = building.rect.centery + math.sin(math.radians(angle)) * 120
-                    snapped_pos = snap_to_grid((x, y))
+                    pos = building.position + (
+                        math.cos(math.radians(angle)) * 120,
+                        math.sin(math.radians(angle)) * 120,
+                    )
+                    snapped_pos = snap_to_grid(pos)
                     if is_valid_building_position(
                         position=snapped_pos,
                         team=self.hq.team,
@@ -210,18 +201,14 @@ class AI:
                     ):
                         if (
                             closest_field
-                            and math.sqrt(
-                                (snapped_pos[0] - closest_field.rect.centerx) ** 2
-                                + (snapped_pos[1] - closest_field.rect.centery) ** 2
-                            )
-                            < 600
+                            and snapped_pos.distance_to(closest_field.position) < 600
                         ):
                             return snapped_pos
 
                         if not closest_field:
                             return snapped_pos
 
-        return snap_to_grid(self.hq.rect.center)
+        return snap_to_grid(self.hq.position)
 
     def _produce_obj(self, cls: type[GameObject]) -> None:
         self.hq.production_queue.append(cls)
@@ -238,7 +225,7 @@ class AI:
         enemy_unit_counts: dict[str, int],
         enemy_buildings: Iterable[Building],
         iron_fields: Iterable[IronField],
-        all_buildings: pg.sprite.Group[Building],
+        all_buildings: pg.sprite.Group[Any],
     ) -> None:
         current_units = {
             "harvester": len([u for u in friendly_units if isinstance(u, Harvester)]),
@@ -426,16 +413,15 @@ class AI:
                 friendly_buildings=friendly_buildings,
             )
         if self.hq.pending_building and not self.hq.pending_building_pos:
-            x, y = self.find_valid_building_position(
+            pos = self.find_valid_building_position(
                 building_cls=self.hq.pending_building,
                 friendly_buildings=friendly_buildings,
                 enemy_buildings=enemy_buildings,
                 iron_fields=iron_fields,
             )
-            self.hq.pending_building_pos = x, y
+            self.hq.pending_building_pos = pos
             self.hq.place_building(
-                x=x,
-                y=y,
+                position=pos,
                 unit_cls=self.hq.pending_building,
                 all_buildings=all_buildings,
             )
@@ -492,10 +478,11 @@ class AI:
                 if target:
                     for unit in attack_units:
                         unit.target_unit = target
-                        unit.target = (
-                            target.rect.centerx + random.uniform(-20, 20),
-                            target.rect.centery + random.uniform(-20, 20),
+                        unit.target = target.position + (
+                            random.uniform(-20, 20),
+                            random.uniform(-20, 20),
                         )
+
         elif tactic == "flank":
             attack_units = combat_units[:wave_size]
             gdi_hq = next(
@@ -515,10 +502,7 @@ class AI:
                         if i < group_size
                         else random.uniform(-120, -80)
                     )
-                    unit.target = (
-                        gdi_hq.rect.centerx + offset_x,
-                        gdi_hq.rect.centery + offset_y,
-                    )
+                    unit.target = gdi_hq.position + (offset_x, offset_y)
                     unit.target_unit = gdi_hq
 
         elif tactic == "all_in":
@@ -532,16 +516,17 @@ class AI:
                 if target:
                     for unit in attack_units:
                         unit.target_unit = target
-                        unit.target = (
-                            target.rect.centerx + random.uniform(-20, 20),
-                            target.rect.centery + random.uniform(-20, 20),
+                        unit.target = target.position + (
+                            random.uniform(-20, 20),
+                            random.uniform(-20, 20),
                         )
+
         elif tactic == "defensive":
             attack_units = combat_units[:wave_size]
             for unit in attack_units:
-                unit.target = (
-                    self.hq.rect.centerx + random.uniform(-50, 50),
-                    self.hq.rect.centery + random.uniform(-50, 50),
+                unit.target = self.hq.position + (
+                    random.uniform(-50, 50),
+                    random.uniform(-50, 50),
                 )
                 unit.target_unit = None
 
@@ -553,7 +538,7 @@ class AI:
         enemy_units: Sequence[GameObject],
         enemy_buildings: Sequence[Building],
         iron_fields: Iterable[IronField],
-        all_buildings: pg.sprite.Group[Building],
+        all_buildings: pg.sprite.Group[Any],
     ) -> None:
         player_unit_counts = self._enemy_unit_counts(
             enemy_units=enemy_units, enemy_buildings=enemy_buildings

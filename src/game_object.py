@@ -1,26 +1,27 @@
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 import pygame as pg
 
 from src.constants import MAP_HEIGHT, MAP_WIDTH
+from src.geometry import Coordinate
 
 if TYPE_CHECKING:
     from src.camera import Camera
     from src.constants import Team
-    from src.geometry import Coordinate
 
 
 class GameObject(pg.sprite.Sprite):
     COST = 0
     POWER_USAGE = 0
+    ARRIVAL_RADIUS = 5
+    """Stops moving toward a target at this distance."""
 
-    def __init__(self, *, x: float, y: float, team: Team) -> None:
+    def __init__(self, *, position: pg.typing.SequenceLike, team: Team) -> None:
         super().__init__()
-        self.rect: pg.Rect = pg.Rect((x, y), (0, 0))  # Nominal, overridden
-        self.image: pg.Surface = pg.Surface((x, y))
+        self.rect: pg.Rect = pg.Rect(position, (0, 0))  # Nominal, overridden
+        self.image: pg.Surface = pg.Surface(position)
         self.team = team
         self.target: Coordinate | None = None
         self.target_unit: GameObject | None = None
@@ -33,37 +34,42 @@ class GameObject(pg.sprite.Sprite):
         self.selected = False
         self.under_attack = False
 
+    @property
+    def position(self) -> Coordinate:
+        return Coordinate(self.rect.center)
+
+    def displacement_to(self, position: pg.typing.SequenceLike) -> pg.Vector2:
+        """Return the displacement to `position`."""
+        return position - self.position
+
+    def distance_to(self, position: pg.typing.SequenceLike) -> float:
+        """Return the distance to `position`."""
+        return (position - self.position).magnitude()
+
     def move_toward(self) -> None:
         if self.target and self.target_unit and self.target_unit.health > 0:
-            dx, dy = (
-                self.target[0] - self.rect.centerx,
-                self.target[1] - self.rect.centery,
-            )
-            dist = math.sqrt(dx**2 + dy**2)
+            dist = self.distance_to(self.target)
             if dist > self.attack_range:
-                if dist > 5:
+                if dist > GameObject.ARRIVAL_RADIUS:
+                    dx, dy = self.displacement_to(self.target)
                     self.rect.x += self.speed * dx / dist
                     self.rect.y += self.speed * dy / dist
                 self.rect.clamp_ip(pg.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
             else:
                 self.target = None
+
         elif self.formation_target:
-            dx, dy = (
-                self.formation_target[0] - self.rect.centerx,
-                self.formation_target[1] - self.rect.centery,
-            )
-            dist = math.sqrt(dx**2 + dy**2)
-            if dist > 5:
+            dist = self.distance_to(self.formation_target)
+            if dist > GameObject.ARRIVAL_RADIUS:
+                dx, dy = self.displacement_to(self.formation_target)
                 self.rect.x += self.speed * dx / dist
                 self.rect.y += self.speed * dy / dist
             self.rect.clamp_ip(pg.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
+
         elif self.target:
-            dx, dy = (
-                self.target[0] - self.rect.centerx,
-                self.target[1] - self.rect.centery,
-            )
-            dist = math.sqrt(dx**2 + dy**2)
-            if dist > 5:
+            dist = self.distance_to(self.target)
+            if dist > GameObject.ARRIVAL_RADIUS:
+                dx, dy = self.displacement_to(self.target)
                 self.rect.x += self.speed * dx / dist
                 self.rect.y += self.speed * dy / dist
             self.rect.clamp_ip(pg.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))

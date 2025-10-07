@@ -15,9 +15,11 @@ if TYPE_CHECKING:
 class Tank(GameObject):
     COST = 500
     POWER_USAGE = 15
+    UNIT_TARGETING_RANGE = 250
+    """Max distance at which a unit can be targeted."""
 
-    def __init__(self, x: float, y: float, team: Team) -> None:
-        super().__init__(x=x, y=y, team=team)
+    def __init__(self, position: pg.typing.SequenceLike, team: Team) -> None:
+        super().__init__(position=position, team=team)
         self.base_image = pg.Surface((30, 20), pg.SRCALPHA)
         # Draw tank body (front facing east/right)
         pg.draw.rect(self.base_image, (100, 100, 100), (0, 0, 30, 20))  # Hull
@@ -29,7 +31,7 @@ class Tank(GameObject):
             self.barrel_image, (70, 70, 70), (0, 0, 20, 4)
         )  # Barrel (extends right)
         self.image = self.base_image
-        self.rect = self.image.get_rect(center=(x, y))
+        self.rect = self.image.get_rect(center=position)
         self.speed = 2.5 if team == Team.GDI else 3
         self.health = 200 if team == Team.GDI else 120
         self.max_health = self.health
@@ -42,21 +44,16 @@ class Tank(GameObject):
     def update(self) -> None:
         super().update()
         if self.target_unit and self.target_unit.health > 0:
-            dist = math.sqrt(
-                (self.rect.centerx - self.target_unit.rect.centerx) ** 2
-                + (self.rect.centery - self.target_unit.rect.centery) ** 2
-            )
             self.target = (
-                (self.target_unit.rect.centerx, self.target_unit.rect.centery)
-                if dist <= 250
+                self.target_unit.position
+                if self.distance_to(self.target_unit.position)
+                <= Tank.UNIT_TARGETING_RANGE
                 else None
             )
             self.target_unit = self.target_unit if self.target else None
+
         if self.target:
-            dx, dy = (
-                self.target[0] - self.rect.centerx,
-                self.target[1] - self.rect.centery,
-            )
+            dx, dy = self.displacement_to(self.target)
             self.angle = math.degrees(
                 math.atan2(dy, dx)
             )  # Use dy instead of -dy to fix vertical direction

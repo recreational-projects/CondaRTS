@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 import pygame as pg
 
+from src.geometry import Coordinate
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -13,7 +15,6 @@ if TYPE_CHECKING:
     from src.camera import Camera
     from src.constants import Team
     from src.game_object import GameObject
-    from src.geometry import Coordinate
 
 
 @dataclass(kw_only=True)
@@ -37,15 +38,15 @@ class FogOfWar:
         self.surface = pg.Surface(self.map_size, pg.SRCALPHA)
         self.surface.fill((0, 0, 0, 255))
 
-    def tile(self, position: Coordinate) -> tuple[int, int]:
+    def tile(self, position: pg.typing.SequenceLike) -> tuple[int, int]:
         """Return tile."""
-        x, y = position
-        return int(x // self.tile_size), int(y // self.tile_size)
+        pos = Coordinate(position)
+        return int(pos.x // self.tile_size), int(pos.y // self.tile_size)
 
-    def _reveal(self, center: Coordinate, radius: float) -> None:
+    def _reveal(self, center: pg.typing.SequenceLike, radius: float) -> None:
         """Set tiles within `radius` of `center` as explored and visible."""
-        cx, cy = center
-        tile_x, tile_y = self.tile(center)
+        center_pos = Coordinate(center)
+        tile_x, tile_y = self.tile(center_pos)
         radius_tiles = int(radius // self.tile_size)
         for y in range(
             max(0, tile_y - radius_tiles),
@@ -56,8 +57,8 @@ class FogOfWar:
                 min(len(self.explored), tile_x + radius_tiles + 1),
             ):
                 if (
-                    (cx - (x * self.tile_size + self.tile_size // 2)) ** 2
-                    + (cy - (y * self.tile_size + self.tile_size // 2)) ** 2
+                    (center_pos.x - (x * self.tile_size + self.tile_size // 2)) ** 2
+                    + (center_pos.y - (y * self.tile_size + self.tile_size // 2)) ** 2
                 ) <= radius**2:
                     self.explored[x][y] = True
                     self.visible[x][y] = True
@@ -71,21 +72,21 @@ class FogOfWar:
         ]
         for unit in units:
             if unit.team == team:
-                self._reveal(center=unit.rect.center, radius=150)
+                self._reveal(center=unit.position, radius=150)
 
         for building in buildings:
             if building.team == team:
-                self._reveal(center=building.rect.center, radius=200)
+                self._reveal(center=building.position, radius=200)
 
             if building.health > 0:
-                tile_x, tile_y = self.tile(building.rect.center)
+                tile_x, tile_y = self.tile(building.position)
                 if 0 <= tile_x < len(self.visible) and 0 <= tile_y < len(
                     self.visible[0]
                 ):
                     self.visible[tile_x][tile_y] = True
                     # indirectly makes enemy buildings in tile visible
 
-    def is_visible(self, position: Coordinate) -> bool:
+    def is_visible(self, position: pg.typing.SequenceLike) -> bool:
         """Return whether `position` is in a visible tile."""
         tile_x, tile_y = self.tile(position)
         if 0 <= tile_x < len(self.visible) and 0 <= tile_y < len(self.visible[0]):
@@ -93,7 +94,7 @@ class FogOfWar:
 
         return False
 
-    def is_explored(self, position: Coordinate) -> bool:
+    def is_explored(self, position: pg.typing.SequenceLike) -> bool:
         """Return whether `position` is in an explored tile."""
         tile_x, tile_y = self.tile(position)
         if 0 <= tile_x < len(self.explored) and 0 <= tile_y < len(self.explored[0]):

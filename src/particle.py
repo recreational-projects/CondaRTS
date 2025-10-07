@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 
 import pygame as pg
 
+from src.geometry import Coordinate
+
 if TYPE_CHECKING:
     from src.camera import Camera
 
@@ -11,8 +13,7 @@ if TYPE_CHECKING:
 class Particle(pg.sprite.Sprite):
     def __init__(
         self,
-        x: float,
-        y: float,
+        position: pg.typing.SequenceLike,
         vx: float,
         vy: float,
         size: int,
@@ -22,11 +23,15 @@ class Particle(pg.sprite.Sprite):
         super().__init__()
         self.image: pg.Surface = pg.Surface((size, size), pg.SRCALPHA)
         pg.draw.circle(self.image, color, (size // 2, size // 2), size // 2)
-        self.rect: pg.Rect = self.image.get_rect(center=(x, y))
+        self.rect: pg.Rect = self.image.get_rect(center=position)
         self.vx, self.vy = vx, vy
         self.lifetime = lifetime
         self.alpha = 255
         self.initial_lifetime = lifetime
+
+    @property
+    def position(self) -> Coordinate:
+        return Coordinate(self.rect.center)
 
     def update(self) -> None:
         self.rect.x += self.vx

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.barracks import Barracks
 from src.building import Building
@@ -27,8 +26,6 @@ if TYPE_CHECKING:
     import pygame as pg
 
     from src.game_object import GameObject
-    from src.geometry import Coordinate
-    from src.particle import Particle
 
 
 class Headquarters(Building):
@@ -37,10 +34,11 @@ class Headquarters(Building):
     BASE_PRODUCTION_TIME = 180
     BASE_POWER = 300
 
-    def __init__(self, *, x: float, y: float, team: Team, font: pg.Font) -> None:
+    def __init__(
+        self, *, position: pg.typing.SequenceLike, team: Team, font: pg.Font
+    ) -> None:
         super().__init__(
-            x=x,
-            y=y,
+            position=position,
             team=team,
             color=GDI_COLOR if team == Team.GDI else NOD_COLOR,
             font=font,
@@ -51,7 +49,7 @@ class Headquarters(Building):
         self.production_queue: list[type[GameObject]] = []
         self.production_timer: float = 0
         self.pending_building: type[Building] | None = None
-        self.pending_building_pos: Coordinate | None = None
+        self.pending_building_pos: pg.typing.SequenceLike | None = None
 
         # Calculated every update():
         self.power_usage: int = 0
@@ -105,10 +103,10 @@ class Headquarters(Building):
 
     def update(
         self,
-        particles: pg.sprite.Group[Particle],
-        friendly_units: pg.sprite.Group[GameObject],
-        friendly_buildings: Iterable[Building],
-        all_units: pg.sprite.Group[GameObject],
+        particles: pg.sprite.Group[Any],
+        friendly_units: pg.sprite.Group[Any],
+        friendly_buildings: Iterable[Any],
+        all_units: pg.sprite.Group[Any],
         *args,
         **kwargs,
     ) -> None:
@@ -148,11 +146,9 @@ class Headquarters(Building):
 
                         spawn_building = min(
                             barracks,
-                            key=lambda b: math.sqrt(
-                                (b.rect.centerx - self.rect.centerx) ** 2
-                                + (b.rect.centery - self.rect.centery) ** 2
-                            ),
+                            key=lambda b: self.distance_to(b.position),
                         )
+
                     elif unit_cls in [Tank, Harvester]:
                         warfactories = [
                             b
@@ -163,29 +159,24 @@ class Headquarters(Building):
                             return
 
                         spawn_building = min(
-                            warfactories,
-                            key=lambda b: math.sqrt(
-                                (b.rect.centerx - self.rect.centerx) ** 2
-                                + (b.rect.centery - self.rect.centery) ** 2
-                            ),
+                            warfactories, key=lambda b: self.distance_to(b.position)
                         )
-                    spawn_x, spawn_y = (
+                    spawn_pos = (
                         spawn_building.rect.right + 20,
-                        spawn_building.rect.centery,
+                        spawn_building.position.y,
                     )
                     new_units = [
                         Harvester(
-                            x=spawn_x,
-                            y=spawn_y,
+                            position=spawn_pos,
                             team=self.team,
                             hq=self,
                             font=self.font,
                         )
                         if unit_cls == Harvester
-                        else unit_cls(x=spawn_x, y=spawn_y, team=self.team)
+                        else unit_cls(position=spawn_pos, team=self.team)
                     ]
                     formation_positions = calculate_formation_positions(
-                        center=(spawn_x, spawn_y),
+                        center=spawn_pos,
                         target=None,
                         num_units=len(new_units),
                         direction=0,
@@ -208,20 +199,19 @@ class Headquarters(Building):
     def place_building(
         self,
         *,
-        x: float,
-        y: float,
+        position: pg.typing.SequenceLike,
         unit_cls: type[Building],
-        all_buildings: pg.sprite.Group[Building],
+        all_buildings: pg.sprite.Group[Any],
     ) -> None:
-        snap_x, snap_y = snap_to_grid((x, y))
+        snapped_pos = snap_to_grid(position)
         if is_valid_building_position(
-            position=(snap_x, snap_y),
+            position=snapped_pos,
             team=self.team,
             new_building_cls=unit_cls,
             buildings=all_buildings,
         ):
             all_buildings.add(
-                unit_cls(x=snap_x, y=snap_y, team=self.team, font=self.font)
+                unit_cls(position=snapped_pos, team=self.team, font=self.font)
             )
             self.pending_building = None
             self.pending_building_pos = None

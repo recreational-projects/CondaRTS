@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 
 import pygame as pg
 
+from src.geometry import Coordinate
+
 if TYPE_CHECKING:
     from src.camera import Camera
 
@@ -21,6 +23,10 @@ class IronField(pg.sprite.Sprite):
         self.font = font
         self.resources = resources
         self.regen_timer = 500
+
+    @property
+    def position(self) -> Coordinate:
+        return Coordinate(self.rect.center)
 
     def update(self) -> None:
         if self.regen_timer > 0:
