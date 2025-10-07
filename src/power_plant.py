@@ -7,6 +7,7 @@ from src.constants import Team
 
 
 class PowerPlant(Building):
+    # Override base class(es):
     COST = 300
     POWER_OUTPUT = 100
     POWER_USAGE = 0

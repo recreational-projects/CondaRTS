@@ -12,8 +12,14 @@ if TYPE_CHECKING:
 
 
 class Infantry(GameObject):
+    # Override base class(es):
+    ATTACK_RANGE = 50
     COST = 100
+    IS_MOBILE = True
     POWER_USAGE = 5
+
+    # Class specific:
+    ATTACK_COOLDOWN_PERIOD = 25
     UNIT_TARGETING_RANGE = 200
     """Max distance at which a unit can be targeted."""
 
@@ -24,9 +30,7 @@ class Infantry(GameObject):
         self.speed = 3.5 if team == Team.GDI else 4
         self.health = 100 if team == Team.GDI else 60
         self.max_health = self.health
-        self.attack_range = 50
         self.attack_damage = 8
-        self.attack_cooldown = 25
 
         # Draw infantry as a simple soldier
         pg.draw.circle(self.image, (150, 150, 150), (8, 4), 4)  # Head

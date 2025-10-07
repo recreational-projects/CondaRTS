@@ -7,6 +7,7 @@ from src.constants import Team
 
 
 class WarFactory(Building):
+    # Override base class(es):
     COST = 1000
     POWER_USAGE = 35
 

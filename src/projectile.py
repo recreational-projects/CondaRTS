@@ -14,10 +14,11 @@ if TYPE_CHECKING:
     from src.constants import Team
     from src.game_object import GameObject
 
+HIT_RADIUS = 3
+
 
 class Projectile(pg.sprite.Sprite):
     SPEED: float = 6
-    HIT_RADIUS = 3
 
     def __init__(
         self,
@@ -42,10 +43,7 @@ class Projectile(pg.sprite.Sprite):
 
     def update(self, particles: pg.sprite.Group[Any]) -> None:
         if self.target_unit and self.target_unit.health > 0:
-            if (
-                self.position.distance_to(self.target_unit.position)
-                > Projectile.HIT_RADIUS
-            ):
+            if self.position.distance_to(self.target_unit.position) > HIT_RADIUS:
                 d = self.target_unit.position - self.position
                 angle = math.atan2(d.y, d.x)
                 self.image = pg.transform.rotate(

@@ -15,12 +15,16 @@ if TYPE_CHECKING:
     from src.headquarters import Headquarters
     from src.iron_field import IronField
 
+IRON_TRANSFER_RANGE = 30
+"""Distance within which iron can be harvested/delivered."""
+
 
 class Harvester(GameObject):
+    # Override base class(es):
+    ATTACK_RANGE = 50
     COST = 800
+    IS_MOBILE = True
     POWER_USAGE = 20
-    IRON_TRANSFER_RANGE = 30
-    """Distance within which iron can be harvested/delivered."""
 
     def __init__(
         self,
@@ -44,7 +48,6 @@ class Harvester(GameObject):
         )
         self.target_field: IronField | None = None
         self.harvest_time = 40
-        self.attack_range = 50
         self.attack_damage = 10
         self.attack_cooldown = 30
 
@@ -63,7 +66,7 @@ class Harvester(GameObject):
             for u in enemy_units:
                 if u.health > 0 and isinstance(u, Infantry):
                     dist = self.distance_to(u.position)
-                    if dist < self.attack_range and dist < min_dist:
+                    if dist < Harvester.ATTACK_RANGE and dist < min_dist:
                         closest_target, min_dist = u, dist
 
             if closest_target:
@@ -87,7 +90,7 @@ class Harvester(GameObject):
                     )
             if self.target_field:
                 self.target = self.target_field.position
-                if self.distance_to(self.target) < Harvester.IRON_TRANSFER_RANGE:
+                if self.distance_to(self.target) < IRON_TRANSFER_RANGE:
                     self.state = "HARVESTING"
                     self.target = None
                     self.harvest_time = 40
@@ -112,7 +115,7 @@ class Harvester(GameObject):
                     f"Harvester RETURNING_TO_HQ has no target.\n{self}"
                 )  # Temporary handling, review later
 
-            if self.distance_to(self.target) < Harvester.IRON_TRANSFER_RANGE:
+            if self.distance_to(self.target) < IRON_TRANSFER_RANGE:
                 self.hq.iron += self.iron
                 self.iron = 0
                 self.state = "MOVING_TO_FIELD"

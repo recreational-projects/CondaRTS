@@ -27,12 +27,14 @@ if TYPE_CHECKING:
 
     from src.game_object import GameObject
 
+BASE_POWER = 300
+BASE_PRODUCTION_TIME = 180
+
 
 class Headquarters(Building):
+    # Override base class(es):
     COST = 2000
     SIZE = 80, 80
-    BASE_PRODUCTION_TIME = 180
-    BASE_POWER = 300
 
     def __init__(
         self, *, position: pg.typing.SequenceLike, team: Team, font: pg.Font
@@ -56,7 +58,7 @@ class Headquarters(Building):
         self.power_output: int = 0
 
     def _power_output(self, *, friendly_buildings: Iterable[Building]) -> int:
-        return self.BASE_POWER + sum(
+        return BASE_POWER + sum(
             b.POWER_OUTPUT
             for b in friendly_buildings
             if isinstance(b, PowerPlant) and b.health > 0
@@ -87,7 +89,7 @@ class Headquarters(Building):
                     if isinstance(b, Barracks) and b.health > 0
                 ]
             )
-            return self.BASE_PRODUCTION_TIME * (0.9**barracks_count)
+            return BASE_PRODUCTION_TIME * (0.9**barracks_count)
 
         if unit_class in [Tank, Harvester]:
             warfactory_count = len(
@@ -97,9 +99,9 @@ class Headquarters(Building):
                     if isinstance(b, WarFactory) and b.health > 0
                 ]
             )
-            return self.BASE_PRODUCTION_TIME * (0.9**warfactory_count)
+            return BASE_PRODUCTION_TIME * (0.9**warfactory_count)
 
-        return self.BASE_PRODUCTION_TIME
+        return BASE_PRODUCTION_TIME
 
     def update(
         self,

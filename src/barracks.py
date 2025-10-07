@@ -7,6 +7,7 @@ from src.constants import Team
 
 
 class Barracks(Building):
+    # Override base class(es):
     COST = 500
     POWER_USAGE = 25
 

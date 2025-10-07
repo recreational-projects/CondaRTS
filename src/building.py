@@ -15,8 +15,9 @@ if TYPE_CHECKING:
 
 
 class Building(GameObject):
-    SIZE = 60, 60
+    # Class specific:
     CONSTRUCTION_TIME = 50
+    SIZE = 60, 60
 
     def __init__(
         self,
@@ -31,7 +32,8 @@ class Building(GameObject):
         self.rect = self.image.get_rect(topleft=position)
         self.font = font
         self.construction_progress = 0
-        self.is_seen = False
+        self.is_explored = False
+        """Controls whether AI building is drawn."""
 
         # Add details to building
         pg.draw.rect(self.image, color, ((0, 0), self.SIZE))  # Base
@@ -48,6 +50,7 @@ class Building(GameObject):
             pg.draw.rect(self.image, (200, 200, 200), (i, 10, 10, 10))  # Windows
 
     def update(self, particles: pg.sprite.Group[Any], *args, **kwargs) -> None:
+        """Update the building, including removal at zero health."""
         if self.construction_progress < self.CONSTRUCTION_TIME:
             self.construction_progress += 1
             self.image.set_alpha(
