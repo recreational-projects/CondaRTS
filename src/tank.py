@@ -13,10 +13,16 @@ if TYPE_CHECKING:
 
 
 class Tank(GameObject):
+    # Override base class(es):
+    ATTACK_RANGE = 200
     COST = 500
+    IS_MOBILE = True
     POWER_USAGE = 15
+
+    # Class specific:
     UNIT_TARGETING_RANGE = 250
     """Max distance at which a unit can be targeted."""
+    ATTACK_COOLDOWN_PERIOD = 50
 
     def __init__(self, position: pg.typing.SequenceLike, team: Team) -> None:
         super().__init__(position=position, team=team)
@@ -35,9 +41,7 @@ class Tank(GameObject):
         self.speed = 2.5 if team == Team.GDI else 3
         self.health = 200 if team == Team.GDI else 120
         self.max_health = self.health
-        self.attack_range = 200
         self.attack_damage = 20 if team == Team.GDI else 15
-        self.attack_cooldown = 50
         self.angle: float = 0
         self.recoil = 0
 

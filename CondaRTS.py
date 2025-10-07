@@ -79,14 +79,14 @@ def handle_attacks(
             closest_target, min_dist = None, float("inf")
             if unit.target_unit and unit.target_unit.health > 0:
                 dist = unit.distance_to(unit.target_unit.position)
-                if dist <= unit.attack_range:
+                if dist <= unit.ATTACK_RANGE:
                     closest_target, min_dist = unit.target_unit, dist
 
             if not closest_target:
                 for obj in (*all_units, *all_buildings):
                     if obj.team != unit.team and obj.health > 0:
                         dist = unit.distance_to(obj.position)
-                        if dist <= unit.attack_range and dist < min_dist:
+                        if dist <= unit.ATTACK_RANGE and dist < min_dist:
                             closest_target, min_dist = obj, dist
 
             if closest_target:
@@ -143,7 +143,8 @@ def handle_attacks(
                     if closest_target.health <= 0:
                         closest_target.kill()
                         unit.target = unit.target_unit = None
-                unit.cooldown_timer = unit.attack_cooldown
+
+                unit.cooldown_timer = unit.ATTACK_COOLDOWN_PERIOD
 
 
 def handle_projectiles(

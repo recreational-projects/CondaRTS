@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 
 
 class Turret(Building):
+    # Override base class(es):
+    ATTACK_RANGE = 180
     COST = 600
     POWER_USAGE = 25
     SIZE = 50, 50
@@ -33,7 +35,6 @@ class Turret(Building):
         )
         self.max_health = 500
         self.health = self.max_health
-        self.attack_range = 180
         self.attack_damage = 15
         self.attack_cooldown = 25
         self.cooldown_timer = 0
@@ -56,7 +57,7 @@ class Turret(Building):
             for u in enemy_units:
                 if u.health > 0:
                     dist = self.distance_to(u.position)
-                    if dist < self.attack_range and dist < min_dist:
+                    if dist < Turret.ATTACK_RANGE and dist < min_dist:
                         closest_target, min_dist = u, dist
 
             if closest_target:

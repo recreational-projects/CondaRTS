@@ -11,12 +11,15 @@ if TYPE_CHECKING:
     from src.camera import Camera
     from src.constants import Team
 
+ARRIVAL_RADIUS = 5
+
 
 class GameObject(pg.sprite.Sprite):
+    ATTACK_RANGE = 0
     COST = 0
+    IS_MOBILE = False
+    """Override for mobile classes."""
     POWER_USAGE = 0
-    ARRIVAL_RADIUS = 5
-    """Stops moving toward a target at this distance."""
 
     def __init__(self, *, position: pg.typing.SequenceLike, team: Team) -> None:
         super().__init__()
@@ -29,7 +32,6 @@ class GameObject(pg.sprite.Sprite):
         self.speed: float = 0
         self.health = 0
         self.max_health = self.health
-        self.attack_range = 0
         self.cooldown_timer = 0
         self.selected = False
         self.under_attack = False
@@ -47,10 +49,16 @@ class GameObject(pg.sprite.Sprite):
         return (position - self.position).magnitude()
 
     def move_toward(self) -> None:
+        """Only relevant for mobile classes."""
+        if not self.IS_MOBILE:
+            raise TypeError(
+                f"Can't move unit of non-mobile class {self.__class__.__name__}"
+            )
+
         if self.target and self.target_unit and self.target_unit.health > 0:
             dist = self.distance_to(self.target)
-            if dist > self.attack_range:
-                if dist > GameObject.ARRIVAL_RADIUS:
+            if dist > self.ATTACK_RANGE:
+                if dist > ARRIVAL_RADIUS:
                     dx, dy = self.displacement_to(self.target)
                     self.rect.x += self.speed * dx / dist
                     self.rect.y += self.speed * dy / dist
@@ -60,7 +68,7 @@ class GameObject(pg.sprite.Sprite):
 
         elif self.formation_target:
             dist = self.distance_to(self.formation_target)
-            if dist > GameObject.ARRIVAL_RADIUS:
+            if dist > ARRIVAL_RADIUS:
                 dx, dy = self.displacement_to(self.formation_target)
                 self.rect.x += self.speed * dx / dist
                 self.rect.y += self.speed * dy / dist
@@ -68,7 +76,7 @@ class GameObject(pg.sprite.Sprite):
 
         elif self.target:
             dist = self.distance_to(self.target)
-            if dist > GameObject.ARRIVAL_RADIUS:
+            if dist > ARRIVAL_RADIUS:
                 dx, dy = self.displacement_to(self.target)
                 self.rect.x += self.speed * dx / dist
                 self.rect.y += self.speed * dy / dist
@@ -76,7 +84,9 @@ class GameObject(pg.sprite.Sprite):
 
     def update(self, *args, **kwargs) -> None:
         super().update(*args, **kwargs)
-        self.move_toward()
+        if self.IS_MOBILE:
+            self.move_toward()
+
         if self.cooldown_timer > 0:
             self.cooldown_timer -= 1
 

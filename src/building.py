@@ -15,8 +15,9 @@ if TYPE_CHECKING:
 
 
 class Building(GameObject):
-    SIZE = 60, 60
+    # Class specific:
     CONSTRUCTION_TIME = 50
+    SIZE = 60, 60
 
     def __init__(
         self,
@@ -48,6 +49,7 @@ class Building(GameObject):
             pg.draw.rect(self.image, (200, 200, 200), (i, 10, 10, 10))  # Windows
 
     def update(self, particles: pg.sprite.Group[Any], *args, **kwargs) -> None:
+        """Update the building, including removal at zero health."""
         if self.construction_progress < self.CONSTRUCTION_TIME:
             self.construction_progress += 1
             self.image.set_alpha(
