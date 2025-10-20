@@ -4,15 +4,15 @@ from typing import TYPE_CHECKING, Literal
 
 import pygame as pg
 
-from src.game_object import GameObject
-from src.infantry import Infantry
+from src.game_objects.game_object import GameObject
+from src.game_objects.units.infantry import Infantry
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from src.camera import Camera
     from src.constants import Team
-    from src.headquarters import Headquarters
+    from src.game_objects.buildings.headquarters import Headquarters
     from src.iron_field import IronField
 
 IRON_TRANSFER_RANGE = 30
@@ -20,6 +20,8 @@ IRON_TRANSFER_RANGE = 30
 
 
 class Harvester(GameObject):
+    """Resource collector."""
+
     # Override base class(es):
     ATTACK_RANGE = 50
     COST = 800

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 import pygame as pg
 
 from src.constants import GDI_COLOR
-from src.game_object import GameObject
+from src.game_objects.game_object import GameObject
 from src.particle import Particle
 
 if TYPE_CHECKING:
@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 
 class Building(GameObject):
+    """Building base class. Stationary."""
+
     # Class specific:
     CONSTRUCTION_TIME = 50
     SIZE = 60, 60

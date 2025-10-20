@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 
 
 class IronField(pg.sprite.Sprite):
+    """Stationary resource node for harvesters."""
+
     def __init__(
         self, *, x: float, y: float, font: pg.Font, resources: int = 5000
     ) -> None:

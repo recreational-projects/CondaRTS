@@ -12,12 +12,14 @@ from src.particle import Particle
 if TYPE_CHECKING:
     from src.camera import Camera
     from src.constants import Team
-    from src.game_object import GameObject
+    from src.game_objects.game_object import GameObject
 
 HIT_RADIUS = 3
 
 
 class Projectile(pg.sprite.Sprite):
+    """For ranged attacks e.g. tank shells."""
+
     SPEED: float = 6
 
     def __init__(

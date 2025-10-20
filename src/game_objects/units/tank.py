@@ -6,13 +6,15 @@ from typing import TYPE_CHECKING
 import pygame as pg
 
 from src.constants import Team
-from src.game_object import GameObject
+from src.game_objects.game_object import GameObject
 
 if TYPE_CHECKING:
     from src.camera import Camera
 
 
 class Tank(GameObject):
+    """Armored vehicle with ranged attack."""
+
     # Override base class(es):
     ATTACK_RANGE = 200
     COST = 500

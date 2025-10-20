@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 
 
 class Particle(pg.sprite.Sprite):
+    """For effects like explosions or muzzle flash."""
+
     def __init__(
         self,
         position: pg.typing.SequenceLike,
