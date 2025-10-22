@@ -21,6 +21,7 @@ from src.constants import (
     TILE_SIZE,
     Team,
 )
+from src.draw_utils import draw_progress_bar
 from src.fog_of_war import FogOfWar
 from src.game_objects.buildings.barracks import Barracks
 from src.game_objects.buildings.headquarters import Headquarters
@@ -38,7 +39,6 @@ from src.geometry import (
 from src.iron_field import IronField
 from src.particle import Particle
 from src.projectile import Projectile
-from src.shapes import draw_progress_bar
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable

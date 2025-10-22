@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 
 import pygame as pg
 
+from src import draw_utils
+from src.constants import VIEW_DEBUG_MODE_IS_ENABLED
 from src.geometry import Coordinate
 
 if TYPE_CHECKING:
@@ -47,3 +49,10 @@ class Particle(pg.sprite.Sprite):
 
     def draw(self, *, surface: pg.Surface, camera: Camera) -> None:
         surface.blit(source=self.image, dest=camera.to_screen(self.rect.topleft))
+        if VIEW_DEBUG_MODE_IS_ENABLED:
+            draw_utils.debug_outline_rect(
+                surface=surface, rect=camera.rect_to_screen(self.rect)
+            )
+            draw_utils.debug_marker(
+                surface=surface, position=camera.to_screen(self.position)
+            )
