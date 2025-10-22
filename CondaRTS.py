@@ -12,7 +12,6 @@ from src.ai import AI
 from src.barracks import Barracks
 from src.camera import Camera
 from src.constants import (
-    CONSOLE_HEIGHT,
     GDI_COLOR,
     MAP_HEIGHT,
     MAP_WIDTH,
@@ -275,7 +274,7 @@ class ProductionInterface:
     font: pg.Font
 
     def __post_init__(self, all_buildings: Iterable[Building]) -> None:
-        self.surface = pg.Surface((self.WIDTH, SCREEN_HEIGHT - CONSOLE_HEIGHT))
+        self.surface = pg.Surface((self.WIDTH, SCREEN_HEIGHT))
 
         tab_button_base = pg.Rect(
             (self.MARGIN_X, self.TAB_BUTTONS_POS_Y),
