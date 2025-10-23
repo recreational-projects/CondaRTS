@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pygame as pg
 
-from src.constants import Team
 from src.game_objects.buildings.building import Building
+from src.team import Faction, Team
 
 
 class PowerPlant(Building):
@@ -20,7 +20,9 @@ class PowerPlant(Building):
         super().__init__(
             position=position,
             team=team,
-            color=pg.Color(130, 130, 0) if team == Team.GDI else pg.Color(130, 0, 0),
+            color=pg.Color(130, 130, 0)
+            if team.faction == Faction.GDI
+            else pg.Color(130, 0, 0),
             font=font,
         )
         self.max_health = 500

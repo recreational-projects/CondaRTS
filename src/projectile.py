@@ -13,8 +13,8 @@ from src.particle import Particle
 
 if TYPE_CHECKING:
     from src.camera import Camera
-    from src.constants import Team
     from src.game_objects.game_object import GameObject
+    from src.team import Team
 
 HIT_RADIUS = 3
 

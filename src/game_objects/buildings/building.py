@@ -11,7 +11,7 @@ from src.particle import Particle
 
 if TYPE_CHECKING:
     from src.camera import Camera
-    from src.constants import Team
+    from src.team import Team
 
 
 class Building(GameObject):

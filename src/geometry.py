@@ -1,3 +1,5 @@
+"""Geometry functions that don't access game state."""
+
 from __future__ import annotations
 
 import math
@@ -6,69 +8,13 @@ from typing import TYPE_CHECKING
 
 import pygame as pg
 
-from src.constants import BUILDING_CONSTRUCTION_RANGE, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE
+from src.constants import TILE_SIZE
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from src.constants import Team
-    from src.game_objects.buildings.building import Building
 
 Coordinate = pg.Vector2
-
-
-def _rect_is_within_map(rect: pg.typing.RectLike) -> bool:
-    """Return whether `rect` is within the map."""
-    map_rect = pg.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT)
-    return map_rect.contains(rect)
-
-
-def _is_near_friendly_building(
-    *, position: pg.typing.SequenceLike, team: Team, buildings: Iterable[Building]
-) -> bool:
-    """Return whether `position` is within construction range of `team`'s buildings."""
-    pos = Coordinate(position)
-    return any(
-        building.team == team
-        and building.health > 0
-        and pos.distance_to(building.position) < BUILDING_CONSTRUCTION_RANGE
-        for building in buildings
-    )
-
-
-def _rect_collides_with_building(
-    *,
-    rect: pg.Rect,
-    buildings: Iterable[Building],
-) -> bool:
-    """Return whether pending building at `position` collides with any building."""
-    return any(
-        building.health > 0 and rect.colliderect(building.rect)
-        for building in buildings
-    )
-
-
-def is_valid_building_position(
-    *,
-    position: pg.typing.SequenceLike,
-    new_building_cls: type[Building],
-    team: Team,
-    buildings: Iterable[Building],
-) -> bool:
-    new_building_footprint = pg.Rect(position, new_building_cls.SIZE)
-    return all(
-        (
-            _rect_is_within_map(
-                new_building_footprint,
-            ),
-            _is_near_friendly_building(
-                position=position, team=team, buildings=buildings
-            ),
-            not _rect_collides_with_building(
-                rect=new_building_footprint, buildings=buildings
-            ),
-        )
-    )
 
 
 def snap_to_grid(position: pg.typing.SequenceLike) -> Coordinate:

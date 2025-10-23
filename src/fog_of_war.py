@@ -16,9 +16,6 @@ if TYPE_CHECKING:
     from src.game_objects.buildings.building import Building
     from src.game_objects.game_object import GameObject
 
-UNIT_EXPLORATION_RADIUS = 150
-BUILDING_EXPLORATION_RADIUS = 200
-
 
 @dataclass(kw_only=True)
 class FogOfWar:

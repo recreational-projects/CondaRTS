@@ -5,14 +5,15 @@ from typing import TYPE_CHECKING, ClassVar
 
 import pygame as pg
 
+from src import geometry
 from src.constants import (
     MAP_HEIGHT,
     MAP_WIDTH,
 )
-from src.geometry import Coordinate, mean_vector
+from src.geometry import Coordinate
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable
 
     from src.game_objects.game_object import GameObject
 
@@ -30,7 +31,7 @@ class Camera:
     def update(
         self,
         *,
-        selected_units: Sequence[GameObject],
+        selected_units: Iterable[GameObject],
         mouse_pos: pg.typing.SequenceLike,
     ) -> None:
         mouse_pos = Coordinate(mouse_pos)
@@ -38,7 +39,7 @@ class Camera:
             return
 
         if selected_units:
-            units_center = mean_vector([u.position for u in selected_units])
+            units_center = geometry.mean_vector([u.position for u in selected_units])
             x = max(
                 self.viewport.width // 2,
                 min(MAP_WIDTH - self.viewport.width // 2, round(units_center.x)),
