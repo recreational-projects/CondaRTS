@@ -13,9 +13,7 @@ class Barracks(Building):
     COST = 500
     POWER_USAGE = 25
 
-    def __init__(
-        self, *, position: pg.typing.SequenceLike, team: Team, font: pg.Font
-    ) -> None:
+    def __init__(self, *, position: pg.typing.Point, team: Team, font: pg.Font) -> None:
         super().__init__(
             position=position,
             team=team,

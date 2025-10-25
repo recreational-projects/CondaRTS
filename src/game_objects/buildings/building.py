@@ -24,7 +24,7 @@ class Building(GameObject):
     def __init__(
         self,
         *,
-        position: pg.typing.SequenceLike,
+        position: pg.typing.Point,
         team: Team,
         color: pg.Color = GDI_COLOR,
         font: pg.Font,

@@ -34,9 +34,7 @@ class Headquarters(Building):
     # Class-specific:
     BASE_POWER = 300
 
-    def __init__(
-        self, *, position: pg.typing.SequenceLike, team: Team, font: pg.Font
-    ) -> None:
+    def __init__(self, *, position: pg.typing.Point, team: Team, font: pg.Font) -> None:
         super().__init__(
             position=position,
             team=team,
@@ -49,7 +47,7 @@ class Headquarters(Building):
         self.production_queue: list[type[GameObject]] = []
         self.production_timer: float = 0
         self.pending_building_class: type[Building] | None = None
-        self.pending_building_pos: pg.typing.SequenceLike | None = None
+        self.pending_building_pos: pg.typing.Point | None = None
 
         # Calculated every update():
         self.power_usage: int = 0
@@ -163,7 +161,7 @@ class Headquarters(Building):
     def place_building(
         self,
         *,
-        position: pg.typing.SequenceLike,
+        position: pg.typing.Point,
         unit_cls: type[Building],
         game: Game,
     ) -> None:

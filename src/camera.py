@@ -32,7 +32,7 @@ class Camera:
         self,
         *,
         selected_units: Iterable[GameObject],
-        mouse_pos: pg.typing.SequenceLike,
+        mouse_pos: pg.typing.Point,
     ) -> None:
         mouse_pos = Coordinate(mouse_pos)
         if not self.viewport.collidepoint(mouse_pos):
@@ -69,7 +69,7 @@ class Camera:
 
         self.viewport.clamp_ip(pg.Rect(0, 0, MAP_WIDTH, MAP_HEIGHT))
 
-    def to_screen(self, world_pos: pg.typing.SequenceLike) -> Coordinate:
+    def to_screen(self, world_pos: pg.typing.Point) -> Coordinate:
         """Translate `world_pos` to screen."""
         return Coordinate(world_pos) + self.map_offset
 
@@ -77,6 +77,6 @@ class Camera:
         """Translate world `rect` to screen."""
         return rect.move(self.map_offset)
 
-    def to_world(self, screen_pos: pg.typing.SequenceLike) -> Coordinate:
+    def to_world(self, screen_pos: pg.typing.IntPoint) -> Coordinate:
         """Translate `screen_pos` to world."""
         return Coordinate(screen_pos) - self.map_offset

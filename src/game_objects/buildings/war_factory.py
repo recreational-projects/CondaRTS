@@ -13,9 +13,7 @@ class WarFactory(Building):
     COST = 1000
     POWER_USAGE = 35
 
-    def __init__(
-        self, *, position: pg.typing.SequenceLike, team: Team, font: pg.Font
-    ) -> None:
+    def __init__(self, *, position: pg.typing.Point, team: Team, font: pg.Font) -> None:
         super().__init__(
             position=position,
             team=team,

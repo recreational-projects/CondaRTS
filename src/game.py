@@ -209,7 +209,7 @@ class Game:
         return map_rect.contains(rect)
 
     def _is_near_friendly_building(
-        self, *, position: pg.typing.SequenceLike, team: Team
+        self, *, position: pg.typing.Point, team: Team
     ) -> bool:
         """Return whether `position` is within construction range of `team`'s buildings."""
         pos = Coordinate(position)
@@ -229,7 +229,7 @@ class Game:
     def is_valid_building_position(
         self,
         *,
-        position: pg.typing.SequenceLike,
+        position: pg.typing.Point,
         new_building_class: type[Building],
         team: Team,
     ) -> bool:

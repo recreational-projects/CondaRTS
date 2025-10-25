@@ -26,7 +26,7 @@ class Projectile(pg.sprite.Sprite):
 
     def __init__(
         self,
-        position: pg.typing.SequenceLike,
+        position: pg.typing.Point,
         target_unit: GameObject,
         damage: int,
         team: Team,

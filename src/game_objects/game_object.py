@@ -23,7 +23,7 @@ class GameObject(pg.sprite.Sprite):
     """Override for mobile classes."""
     POWER_USAGE = 0
 
-    def __init__(self, *, position: pg.typing.SequenceLike, team: Team) -> None:
+    def __init__(self, *, position: pg.typing.Point, team: Team) -> None:
         super().__init__()
         self.rect: pg.Rect = pg.Rect(position, (0, 0))  # Nominal, overridden
         self.image: pg.Surface = pg.Surface(position)
@@ -42,11 +42,11 @@ class GameObject(pg.sprite.Sprite):
     def position(self) -> Coordinate:
         return Coordinate(self.rect.center)
 
-    def displacement_to(self, position: pg.typing.SequenceLike) -> pg.Vector2:
+    def displacement_to(self, position: pg.typing.Point) -> pg.Vector2:
         """Return the displacement to `position`."""
         return position - self.position
 
-    def distance_to(self, position: pg.typing.SequenceLike) -> float:
+    def distance_to(self, position: pg.typing.Point) -> float:
         """Return the distance to `position`."""
         return (position - self.position).magnitude()
 

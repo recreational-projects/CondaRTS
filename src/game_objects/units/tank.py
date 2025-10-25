@@ -26,7 +26,7 @@ class Tank(GameObject):
     """Max distance at which a unit can be targeted."""
     ATTACK_COOLDOWN_PERIOD = 50
 
-    def __init__(self, position: pg.typing.SequenceLike, team: Team) -> None:
+    def __init__(self, position: pg.typing.Point, team: Team) -> None:
         super().__init__(position=position, team=team)
         self.base_image = pg.Surface((30, 20), pg.SRCALPHA)
         # Draw tank body (front facing east/right)

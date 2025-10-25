@@ -26,7 +26,7 @@ class Infantry(GameObject):
     UNIT_TARGETING_RANGE = 200
     """Max distance at which a unit can be targeted."""
 
-    def __init__(self, position: pg.typing.SequenceLike, team: Team) -> None:
+    def __init__(self, position: pg.typing.Point, team: Team) -> None:
         super().__init__(position=position, team=team)
         self.image = pg.Surface((16, 16), pg.SRCALPHA)
         self.rect = self.image.get_rect(center=position)

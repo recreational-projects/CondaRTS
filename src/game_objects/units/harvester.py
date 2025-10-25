@@ -31,7 +31,7 @@ class Harvester(GameObject):
 
     def __init__(
         self,
-        position: pg.typing.SequenceLike,
+        position: pg.typing.Point,
         team: Team,
         hq: Headquarters,
         font: pg.Font,

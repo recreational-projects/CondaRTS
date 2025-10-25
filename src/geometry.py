@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 Coordinate = pg.Vector2
 
 
-def snap_to_grid(position: pg.typing.SequenceLike) -> Coordinate:
+def snap_to_grid(position: pg.typing.Point) -> Coordinate:
     """Return minimum (top left) point of tile containing `position`."""
     pos = Coordinate(position)
     return Coordinate(pos.x // TILE_SIZE * TILE_SIZE, pos.y // TILE_SIZE * TILE_SIZE)
@@ -25,8 +25,8 @@ def snap_to_grid(position: pg.typing.SequenceLike) -> Coordinate:
 
 def calculate_formation_positions(
     *,
-    center: pg.typing.SequenceLike,
-    target: pg.typing.SequenceLike | None,
+    center: pg.typing.Point,
+    target: pg.typing.Point | None,
     num_units: int,
     direction: float | None = None,
 ) -> list[Coordinate]:
